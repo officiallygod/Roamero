@@ -206,21 +206,21 @@ async function initHeroGlobe(mountEl) {
         sources: {
           countries: {
             type: 'geojson',
-            data: import.meta.env.BASE_URL + 'data/110m.geojson'
+            data: import.meta.env.BASE_URL + 'data/50m.geojson'
           }
         },
         layers: [
           {
             id: 'background',
             type: 'background',
-            paint: { 'background-color': 'rgba(0,0,0,0)' }
+            paint: { 'background-color': isDark ? '#000000' : '#f0f2f5' }
           },
           {
             id: 'country-fills',
             type: 'fill',
             source: 'countries',
             paint: {
-              'fill-color': isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.03)',
+              'fill-color': isDark ? '#121212' : '#ffffff',
               'fill-opacity': 1.0
             }
           },
@@ -229,15 +229,15 @@ async function initHeroGlobe(mountEl) {
             type: 'line',
             source: 'countries',
             paint: {
-              'line-color': isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)',
+              'line-color': isDark ? '#2a2a2a' : '#e0e2e6',
               'line-width': 0.8
             }
           }
         ]
       },
       center: [0, 20],
-      zoom: 1.5,
-      minZoom: 1.5,
+      zoom: 0.8,
+      minZoom: 0.8,
       interactive: false
     });
     

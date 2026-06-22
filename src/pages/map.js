@@ -121,12 +121,17 @@ export async function renderMap(container, router) {
  */
 function getMapStyle(isDark, visits) {
   const visitedIsos = Object.keys(visits.countries);
-  const matchExpr = ['match', ['get', 'ISO_A2']];
   
-  // By using slightly translucent colors for unvisited countries,
-  // the beautiful CSS gradient background shines through them!
-  const unvisitedDark = 'rgba(255,255,255,0.06)';
-  const unvisitedLight = 'rgba(0,0,0,0.03)';
+  // Natural Earth uses -99 for France and Norway. Real ISO is in ISO_A2_EH
+  const getIso = ['case', 
+    ['==', ['get', 'ISO_A2'], '-99'], ['get', 'ISO_A2_EH'], 
+    ['get', 'ISO_A2']
+  ];
+  
+  const matchExpr = ['match', getIso];
+  
+  const unvisitedDark = '#121212';
+  const unvisitedLight = '#ffffff';
   
   if (visitedIsos.length === 0) {
     matchExpr.push('NONE', '#8b5cf6', isDark ? unvisitedDark : unvisitedLight);
@@ -145,8 +150,8 @@ function getMapStyle(isDark, visits) {
     sources: {
       countries: {
         type: 'geojson',
-        // Use 110m to remove small islands and unimportant tiny countries
-        data: import.meta.env.BASE_URL + 'data/110m.geojson'
+        // 50m provides gorgeous smooth borders, while MapLibre keeps it lightning fast
+        data: import.meta.env.BASE_URL + 'data/50m.geojson'
       }
     },
     layers: [
@@ -154,8 +159,7 @@ function getMapStyle(isDark, visits) {
         id: 'background',
         type: 'background',
         paint: {
-          // Transparent to let the beautiful CSS gradient show through the ocean
-          'background-color': 'rgba(0,0,0,0)'
+          'background-color': isDark ? '#000000' : '#f0f2f5'
         }
       },
       {
@@ -172,8 +176,7 @@ function getMapStyle(isDark, visits) {
         type: 'line',
         source: 'countries',
         paint: {
-          // Very subtle, minimal borders
-          'line-color': isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)',
+          'line-color': isDark ? '#2a2a2a' : '#e0e2e6',
           'line-width': 0.8
         }
       },
@@ -181,7 +184,7 @@ function getMapStyle(isDark, visits) {
         id: 'country-labels',
         type: 'symbol',
         source: 'countries',
-        minzoom: 4.5, // Only show when zoomed in completely
+        minzoom: 4.0, // Only show when zoomed in
         filter: ['>', ['get', 'POP_EST'], 5000000], // Filter tiny countries
         layout: {
           'text-field': ['get', 'NAME'],
@@ -197,15 +200,15 @@ function getMapStyle(isDark, visits) {
           'text-justify': 'center'
         },
         paint: {
-          'text-color': isDark ? '#ffffff' : '#000000',
-          'text-halo-color': isDark ? 'rgba(0,0,0,0.8)' : 'rgba(255,255,255,0.8)',
-          'text-halo-width': 1.5,
+          'text-color': isDark ? '#8b7faf' : '#6b7280',
+          'text-halo-color': isDark ? '#121212' : '#ffffff',
+          'text-halo-width': 2,
           'text-opacity': [
             'interpolate',
             ['linear'],
             ['zoom'],
-            4.5, 0, // Fade in smoothly
-            5.5, 1
+            4.0, 0, // Fade in smoothly
+            5.0, 1
           ]
         }
       }
@@ -233,8 +236,8 @@ async function initMap(container) {
       container: mountEl,
       style: getMapStyle(isDark, visits),
       center: [10, 20],
-      zoom: 2.5,
-      minZoom: 2.5,
+      zoom: 1.5,
+      minZoom: 1.5,
       maxZoom: 10,
       interactive: true,
       pitchWithRotate: false,
