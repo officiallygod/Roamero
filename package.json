@@ -1,0 +1,30 @@
+{
+  "name": "roamero",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Every Place. Every Journey. — Track your travels across an interactive 3D globe.",
+  "author": "officiallygod",
+  "license": "MIT",
+  "homepage": "https://officiallygod.github.io/Roamero/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/officiallygod/Roamero.git"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.1",
+    "vite": "^8.0.12",
+    "vite-plugin-pwa": "^1.3.0"
+  },
+  "dependencies": {
+    "fuse.js": "^7.4.2",
+    "globe.gl": "^2.46.1",
+    "three": "^0.184.0",
+    "vanilla-cookieconsent": "^3.1.0"
+  }
+}

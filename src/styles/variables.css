@@ -1,0 +1,217 @@
+/* ============================================
+   ROAMERO DESIGN SYSTEM
+   Theme: Modern Lavender / Deep Space
+   ============================================ */
+
+:root {
+  /* === Typography === */
+  --font-primary: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-display: 'Space Grotesk', 'Inter', sans-serif;
+  
+  /* === Font Sizes === */
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-base: 1rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.25rem;
+  --text-2xl: 1.5rem;
+  --text-3xl: 1.875rem;
+  --text-4xl: 2.25rem;
+  --text-5xl: 3rem;
+  --text-6xl: 3.75rem;
+  --text-hero: clamp(2.5rem, 6vw, 5rem);
+  
+  /* === Font Weights === */
+  --weight-light: 300;
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 700;
+  --weight-black: 900;
+  
+  /* === Spacing === */
+  --space-xs: 0.25rem;
+  --space-sm: 0.5rem;
+  --space-md: 1rem;
+  --space-lg: 1.5rem;
+  --space-xl: 2rem;
+  --space-2xl: 3rem;
+  --space-3xl: 4rem;
+  --space-4xl: 6rem;
+  
+  /* === Border Radius === */
+  --radius-sm: 0.375rem;
+  --radius-md: 0.75rem;
+  --radius-lg: 1rem;
+  --radius-xl: 1.5rem;
+  --radius-2xl: 2rem;
+  --radius-full: 9999px;
+  
+  /* === Shadows === */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+  --shadow-glow: 0 0 20px rgba(139, 92, 246, 0.3);
+  --shadow-glow-lg: 0 0 40px rgba(139, 92, 246, 0.4);
+  
+  /* === Transitions === */
+  --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-base: 250ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-slow: 400ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-spring: 500ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  
+  /* === Z-Index Scale === */
+  --z-base: 0;
+  --z-dropdown: 100;
+  --z-sticky: 200;
+  --z-overlay: 300;
+  --z-modal: 400;
+  --z-toast: 500;
+  --z-tooltip: 600;
+  
+  /* === Glassmorphism === */
+  --glass-bg: rgba(255, 255, 255, 0.08);
+  --glass-border: rgba(255, 255, 255, 0.12);
+  --glass-blur: blur(20px);
+  --glass-blur-heavy: blur(40px);
+}
+
+/* ============================================
+   DARK THEME (Default)
+   ============================================ */
+[data-theme="dark"] {
+  /* === Core Palette === */
+  --color-bg-primary: #0f0a1e;
+  --color-bg-secondary: #1a1432;
+  --color-bg-tertiary: #241e3e;
+  --color-bg-elevated: #2d2650;
+  
+  /* === Surface Colors === */
+  --color-surface: rgba(30, 24, 54, 0.85);
+  --color-surface-hover: rgba(42, 34, 72, 0.9);
+  --color-surface-active: rgba(55, 45, 90, 0.95);
+  --color-surface-glass: rgba(20, 15, 40, 0.6);
+  
+  /* === Text Colors === */
+  --color-text-primary: #f0ecf9;
+  --color-text-secondary: #a89cc8;
+  --color-text-tertiary: #7b6f9e;
+  --color-text-muted: #5a4f7a;
+  --color-text-inverse: #0f0a1e;
+  
+  /* === Accent Colors === */
+  --color-accent: #8b5cf6;
+  --color-accent-light: #a78bfa;
+  --color-accent-dark: #7c3aed;
+  --color-accent-glow: rgba(139, 92, 246, 0.4);
+  
+  /* === Semantic Colors === */
+  --color-success: #34d399;
+  --color-success-bg: rgba(52, 211, 153, 0.12);
+  --color-warning: #fbbf24;
+  --color-warning-bg: rgba(251, 191, 36, 0.12);
+  --color-danger: #f87171;
+  --color-danger-bg: rgba(248, 113, 113, 0.12);
+  --color-info: #60a5fa;
+  --color-info-bg: rgba(96, 165, 250, 0.12);
+  
+  /* === Visited Place Colors === */
+  --color-visited: #c084fc;
+  --color-visited-glow: rgba(192, 132, 252, 0.5);
+  --color-unvisited: rgba(139, 92, 246, 0.08);
+  --color-unvisited-border: rgba(139, 92, 246, 0.2);
+  --color-hover-country: rgba(139, 92, 246, 0.25);
+  
+  /* === Gradient Presets === */
+  --gradient-primary: linear-gradient(135deg, #8b5cf6 0%, #ec4899 100%);
+  --gradient-surface: linear-gradient(135deg, rgba(30, 24, 54, 0.9) 0%, rgba(42, 34, 72, 0.9) 100%);
+  --gradient-hero: linear-gradient(135deg, #0f0a1e 0%, #1a1432 40%, #2d1b69 100%);
+  --gradient-accent: linear-gradient(135deg, #7c3aed 0%, #8b5cf6 50%, #a78bfa 100%);
+  --gradient-warm: linear-gradient(135deg, #f59e0b 0%, #ec4899 50%, #8b5cf6 100%);
+  --gradient-globe: radial-gradient(circle at 30% 30%, #2d1b69, #0f0a1e 70%);
+  
+  /* === Border Colors === */
+  --color-border: rgba(139, 92, 246, 0.15);
+  --color-border-hover: rgba(139, 92, 246, 0.3);
+  --color-border-active: rgba(139, 92, 246, 0.5);
+  
+  /* === Scrollbar === */
+  --scrollbar-track: #1a1432;
+  --scrollbar-thumb: #3d2e6e;
+  --scrollbar-thumb-hover: #8b5cf6;
+  
+  /* === Globe specific === */
+  --globe-atmosphere: rgba(139, 92, 246, 0.3);
+  --globe-country-default: #1e1842;
+  --globe-country-stroke: rgba(139, 92, 246, 0.3);
+  --globe-ocean: #0a0614;
+}
+
+/* ============================================
+   LIGHT THEME
+   ============================================ */
+[data-theme="light"] {
+  --color-bg-primary: #f5f0ff;
+  --color-bg-secondary: #ede5ff;
+  --color-bg-tertiary: #e2d8f5;
+  --color-bg-elevated: #ffffff;
+  
+  --color-surface: rgba(255, 255, 255, 0.85);
+  --color-surface-hover: rgba(237, 229, 255, 0.9);
+  --color-surface-active: rgba(226, 216, 245, 0.95);
+  --color-surface-glass: rgba(255, 255, 255, 0.7);
+  
+  --color-text-primary: #1a0e3a;
+  --color-text-secondary: #4a3d6e;
+  --color-text-tertiary: #7b6f9e;
+  --color-text-muted: #a89cc8;
+  --color-text-inverse: #f0ecf9;
+  
+  --color-accent: #7c3aed;
+  --color-accent-light: #8b5cf6;
+  --color-accent-dark: #6d28d9;
+  --color-accent-glow: rgba(124, 58, 237, 0.2);
+  
+  --color-success: #059669;
+  --color-success-bg: rgba(5, 150, 105, 0.1);
+  --color-warning: #d97706;
+  --color-warning-bg: rgba(217, 119, 6, 0.1);
+  --color-danger: #dc2626;
+  --color-danger-bg: rgba(220, 38, 38, 0.1);
+  --color-info: #2563eb;
+  --color-info-bg: rgba(37, 99, 235, 0.1);
+  
+  --color-visited: #7c3aed;
+  --color-visited-glow: rgba(124, 58, 237, 0.3);
+  --color-unvisited: rgba(124, 58, 237, 0.05);
+  --color-unvisited-border: rgba(124, 58, 237, 0.15);
+  --color-hover-country: rgba(124, 58, 237, 0.15);
+  
+  --gradient-primary: linear-gradient(135deg, #7c3aed 0%, #db2777 100%);
+  --gradient-surface: linear-gradient(135deg, rgba(255, 255, 255, 0.9) 0%, rgba(237, 229, 255, 0.9) 100%);
+  --gradient-hero: linear-gradient(135deg, #f5f0ff 0%, #ede5ff 40%, #ddd0ff 100%);
+  --gradient-accent: linear-gradient(135deg, #6d28d9 0%, #7c3aed 50%, #8b5cf6 100%);
+  --gradient-warm: linear-gradient(135deg, #f59e0b 0%, #ec4899 50%, #7c3aed 100%);
+  --gradient-globe: radial-gradient(circle at 30% 30%, #ddd0ff, #f5f0ff 70%);
+  
+  --color-border: rgba(124, 58, 237, 0.12);
+  --color-border-hover: rgba(124, 58, 237, 0.25);
+  --color-border-active: rgba(124, 58, 237, 0.4);
+  
+  --scrollbar-track: #ede5ff;
+  --scrollbar-thumb: #c4b5fd;
+  --scrollbar-thumb-hover: #7c3aed;
+  
+  --globe-atmosphere: rgba(124, 58, 237, 0.2);
+  --globe-country-default: #e2d8f5;
+  --globe-country-stroke: rgba(124, 58, 237, 0.25);
+  --globe-ocean: #f5f0ff;
+  
+  --shadow-sm: 0 1px 2px rgba(124, 58, 237, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(124, 58, 237, 0.08), 0 2px 4px -2px rgba(124, 58, 237, 0.06);
+  --shadow-lg: 0 10px 15px -3px rgba(124, 58, 237, 0.08), 0 4px 6px -4px rgba(124, 58, 237, 0.06);
+  --shadow-xl: 0 20px 25px -5px rgba(124, 58, 237, 0.1), 0 8px 10px -6px rgba(124, 58, 237, 0.08);
+  --shadow-glow: 0 0 20px rgba(124, 58, 237, 0.15);
+  --shadow-glow-lg: 0 0 40px rgba(124, 58, 237, 0.2);
+}
