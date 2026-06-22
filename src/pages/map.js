@@ -262,31 +262,59 @@ async function initGlobe(container) {
           }
         });
         
-      // Configure Labels (Start empty, load on zoom)
-      globe
-        .labelsData([])
-        .labelLat(d => d.properties.LABEL_Y)
-        .labelLng(d => d.properties.LABEL_X)
-        .labelText(d => d.properties.NAME)
-        .labelSize(0.8)
-        .labelDotRadius(0.1)
-        .labelColor(() => isDark ? 'rgba(255, 255, 255, 0.6)' : 'rgba(0, 0, 0, 0.6)')
-        .labelResolution(2);
+      // Configure CSS3D HTML Labels
+      globe.htmlElement(d => {
+        const el = document.createElement('div');
+        el.innerHTML = d.name;
+        el.style.color = isDark ? 'rgba(255, 255, 255, 0.85)' : 'rgba(0, 0, 0, 0.85)';
+        el.style.fontFamily = "'Inter', sans-serif";
+        el.style.fontSize = '12px';
+        el.style.fontWeight = '600';
+        el.style.textShadow = isDark 
+          ? '0 1px 4px rgba(0,0,0,0.8)' 
+          : '0 1px 4px rgba(255,255,255,0.8)';
+        el.style.pointerEvents = 'none'; // Prevent blocking hover raycasts
+        el.style.userSelect = 'none';
+        el.style.whiteSpace = 'nowrap';
+        el.style.opacity = '0';
+        el.style.transition = 'opacity 0.4s ease';
+        setTimeout(() => el.style.opacity = '1', 50); // Fade in
+        return el;
+      });
         
-      // Level of Detail (LOD) Camera Listener
+      // Level of Detail (LOD) Camera Listener & Culling
       let currentLod = 'low';
+      
+      // Disable interaction initially to save raycast CPU cycles
+      globe.enablePointerInteraction(false);
+      
       globe.controls().addEventListener('change', () => {
         const dist = globe.controls().getDistance();
+        
+        // When zoomed in: enable raycasting, show HD polygons, show HTML labels
         if (dist < 220 && currentLod === 'low' && geo50m) {
           currentLod = 'high';
           currentGeoJson = geo50m;
           globe.polygonsData(geo50m.features);
-          globe.labelsData(geo50m.features); // Show names when zoomed in
+          globe.enablePointerInteraction(true);
+          
+          // Map GeoJSON to flat array for HTML elements
+          const htmlLabels = geo50m.features
+            .filter(f => f.properties.LABEL_Y && f.properties.LABEL_X)
+            .map(f => ({
+              lat: f.properties.LABEL_Y,
+              lng: f.properties.LABEL_X,
+              name: f.properties.NAME
+            }));
+          globe.htmlElementsData(htmlLabels);
+          
+        // When zoomed out: disable raycasting, show low-poly, hide labels  
         } else if (dist >= 220 && currentLod === 'high' && geo110m) {
           currentLod = 'low';
           currentGeoJson = geo110m;
           globe.polygonsData(geo110m.features);
-          globe.labelsData([]); // Hide names when zoomed out
+          globe.enablePointerInteraction(false);
+          globe.htmlElementsData([]); 
         }
       });
     }
