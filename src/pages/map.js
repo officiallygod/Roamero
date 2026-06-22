@@ -15,7 +15,10 @@ import * as THREE from 'three';
 let globeInstance = null;
 let fuseInstance = null;
 let countriesData = null;
-let geoJsonData = null;
+let geo110m = null;
+let geo50m = null;
+let currentGeoJson = null;
+let themeObserver = null;
 let currentSidePanel = null;
 
 export async function renderMap(container, router) {
@@ -92,8 +95,25 @@ export async function renderMap(container, router) {
   };
   document.addEventListener('keydown', handleKeydown);
   
+  // Listen for theme changes to update map colors
+  themeObserver = new MutationObserver((mutations) => {
+    mutations.forEach((mutation) => {
+      if (mutation.attributeName === 'data-theme') {
+        const isDark = document.documentElement.dataset.theme === 'dark';
+        if (globeInstance) {
+          globeInstance.globeMaterial().color.set(isDark ? '#1a1625' : '#e6e1f0');
+          globeInstance.atmosphereColor(isDark ? 'rgba(139, 92, 246, 0.15)' : 'rgba(124, 58, 237, 0.1)');
+          globeInstance.labelColor(() => isDark ? 'rgba(255, 255, 255, 0.6)' : 'rgba(0, 0, 0, 0.6)');
+          refreshGlobe(container);
+        }
+      }
+    });
+  });
+  themeObserver.observe(document.documentElement, { attributes: true });
+
   return {
     destroy() {
+      if (themeObserver) themeObserver.disconnect();
       document.removeEventListener('keydown', handleKeydown);
       if (globeInstance) {
         // globe.gl doesn't have a clean destroy, so we just clear the container
@@ -148,16 +168,18 @@ async function initGlobe(container) {
   
   try {
     // Load dependencies in parallel
-    const [Globe, countries, geoJson] = await Promise.all([
+    const baseUrl = import.meta.env.BASE_URL;
+    const [Globe, countries, res110m, res50m] = await Promise.all([
       import('globe.gl').then(m => m.default),
       import('../data/countries.js').then(m => m),
-      fetch('https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_50m_admin_0_countries.geojson')
-        .then(r => r.json())
-        .catch(() => null)
+      fetch(`${baseUrl}data/110m.geojson`).then(r => r.json()).catch(() => null),
+      fetch(`${baseUrl}data/50m.geojson`).then(r => r.json()).catch(() => null)
     ]);
     
     countriesData = countries;
-    geoJsonData = geoJson;
+    geo110m = res110m;
+    geo50m = res50m;
+    currentGeoJson = geo110m || geo50m;
     
     const visits = getVisits();
     const prefs = getPreferences();
@@ -177,10 +199,10 @@ async function initGlobe(container) {
     
     globeInstance = globe;
     
-    // Add GeoJSON polygon layer for countries
-    if (geoJson) {
+    // Add GeoJSON polygon layer for countries (Start with 110m for fast load)
+    if (currentGeoJson) {
       globe
-        .polygonsData(geoJson.features)
+        .polygonsData(currentGeoJson.features)
         .polygonAltitude(d => {
           const iso = d.properties.ISO_A2;
           return visits.countries[iso] ? 0.02 : 0.005;
@@ -240,9 +262,9 @@ async function initGlobe(container) {
           }
         });
         
-      // Add HD Country Names on the globe
+      // Configure Labels (Start empty, load on zoom)
       globe
-        .labelsData(geoJson.features)
+        .labelsData([])
         .labelLat(d => d.properties.LABEL_Y)
         .labelLng(d => d.properties.LABEL_X)
         .labelText(d => d.properties.NAME)
@@ -250,13 +272,30 @@ async function initGlobe(container) {
         .labelDotRadius(0.1)
         .labelColor(() => isDark ? 'rgba(255, 255, 255, 0.6)' : 'rgba(0, 0, 0, 0.6)')
         .labelResolution(2);
+        
+      // Level of Detail (LOD) Camera Listener
+      let currentLod = 'low';
+      globe.controls().addEventListener('change', () => {
+        const dist = globe.controls().getDistance();
+        if (dist < 220 && currentLod === 'low' && geo50m) {
+          currentLod = 'high';
+          currentGeoJson = geo50m;
+          globe.polygonsData(geo50m.features);
+          globe.labelsData(geo50m.features); // Show names when zoomed in
+        } else if (dist >= 220 && currentLod === 'high' && geo110m) {
+          currentLod = 'low';
+          currentGeoJson = geo110m;
+          globe.polygonsData(geo110m.features);
+          globe.labelsData([]); // Hide names when zoomed out
+        }
+      });
     }
     
     // Add city points for visited cities
     addCityPoints(globe, countries, visits);
     
     // Globe controls
-    globe.controls().autoRotate = prefs.autoRotate !== false;
+    globe.controls().autoRotate = false; // Disabled for performance
     globe.controls().autoRotateSpeed = 0.5;
     globe.controls().enableDamping = true;
     globe.controls().dampingFactor = 0.1;
@@ -355,14 +394,13 @@ function addCityPoints(globe, countries, visits) {
  * Refresh the globe colors and data after a visit change
  */
 function refreshGlobe(container) {
-  if (!globeInstance || !geoJsonData || !countriesData) return;
+  if (!globeInstance || !currentGeoJson || !countriesData) return;
   
   const visits = getVisits();
-  const prefs = getPreferences();
-  const isDark = prefs.theme === 'dark';
+  const isDark = document.documentElement.dataset.theme === 'dark';
   
   // Re-trigger polygon rendering
-  globeInstance.polygonsData(geoJsonData.features);
+  globeInstance.polygonsData(currentGeoJson.features);
   
   globeInstance
     .polygonAltitude(d => {
