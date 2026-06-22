@@ -220,7 +220,7 @@ async function initHeroGlobe(mountEl) {
             type: 'fill',
             source: 'countries',
             paint: {
-              'fill-color': isDark ? '#1a1a1a' : '#ffffff',
+              'fill-color': isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.03)',
               'fill-opacity': 1.0
             }
           },
@@ -229,7 +229,7 @@ async function initHeroGlobe(mountEl) {
             type: 'line',
             source: 'countries',
             paint: {
-              'line-color': isDark ? '#333333' : '#e5e5e5',
+              'line-color': isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)',
               'line-width': 0.8
             }
           }

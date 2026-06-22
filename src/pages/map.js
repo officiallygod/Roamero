@@ -123,15 +123,20 @@ function getMapStyle(isDark, visits) {
   const visitedIsos = Object.keys(visits.countries);
   const matchExpr = ['match', ['get', 'ISO_A2']];
   
+  // By using slightly translucent colors for unvisited countries,
+  // the beautiful CSS gradient background shines through them!
+  const unvisitedDark = 'rgba(255,255,255,0.06)';
+  const unvisitedLight = 'rgba(0,0,0,0.03)';
+  
   if (visitedIsos.length === 0) {
-    matchExpr.push('NONE', '#8b5cf6', isDark ? '#1a1a1a' : '#ffffff'); // Default fallback
+    matchExpr.push('NONE', '#8b5cf6', isDark ? unvisitedDark : unvisitedLight);
   } else {
     visitedIsos.forEach(iso => {
        const country = countriesData.COUNTRIES.find(c => c.id === iso);
        const color = getContinentColor(country ? country.continent : 'Europe');
        matchExpr.push(iso, color);
     });
-    matchExpr.push(isDark ? '#1a1a1a' : '#ffffff'); // Default unvisited (Pure white for light, deep grey for dark)
+    matchExpr.push(isDark ? unvisitedDark : unvisitedLight);
   }
 
   return {
@@ -149,7 +154,7 @@ function getMapStyle(isDark, visits) {
         id: 'background',
         type: 'background',
         paint: {
-          // Transparent to let the beautiful CSS gradient show through
+          // Transparent to let the beautiful CSS gradient show through the ocean
           'background-color': 'rgba(0,0,0,0)'
         }
       },
@@ -168,8 +173,40 @@ function getMapStyle(isDark, visits) {
         source: 'countries',
         paint: {
           // Very subtle, minimal borders
-          'line-color': isDark ? '#333333' : '#e5e5e5',
+          'line-color': isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)',
           'line-width': 0.8
+        }
+      },
+      {
+        id: 'country-labels',
+        type: 'symbol',
+        source: 'countries',
+        minzoom: 4.5, // Only show when zoomed in completely
+        filter: ['>', ['get', 'POP_EST'], 5000000], // Filter tiny countries
+        layout: {
+          'text-field': ['get', 'NAME'],
+          'text-font': ['Open Sans Regular'],
+          'text-size': 14,
+          'text-transform': 'uppercase',
+          'text-letter-spacing': 0.1,
+          'symbol-spacing': 1000,
+          'text-padding': 20,
+          'text-allow-overlap': false,
+          'text-ignore-placement': false,
+          'text-variable-anchor': ['center'],
+          'text-justify': 'center'
+        },
+        paint: {
+          'text-color': isDark ? '#ffffff' : '#000000',
+          'text-halo-color': isDark ? 'rgba(0,0,0,0.8)' : 'rgba(255,255,255,0.8)',
+          'text-halo-width': 1.5,
+          'text-opacity': [
+            'interpolate',
+            ['linear'],
+            ['zoom'],
+            4.5, 0, // Fade in smoothly
+            5.5, 1
+          ]
         }
       }
     ]
