@@ -195,34 +195,64 @@ async function initHeroGlobe(mountEl) {
   if (!mountEl) return;
   
   try {
-    const Globe = (await import('globe.gl')).default;
+    const maplibregl = (await import('maplibre-gl')).default;
     
-    const globe = Globe()
-      .globeImageUrl('https://unpkg.com/three-globe@2.41.12/example/img/earth-dark.jpg')
-      .bumpImageUrl('https://unpkg.com/three-globe@2.41.12/example/img/earth-topology.png')
-      .backgroundColor('rgba(0,0,0,0)')
-      .atmosphereColor('rgba(139, 92, 246, 0.3)')
-      .atmosphereAltitude(0.2)
-      .width(mountEl.clientWidth || 500)
-      .height(mountEl.clientHeight || 500)
-      (mountEl);
+    const isDark = document.documentElement.dataset.theme === 'dark' || true;
     
-    // Auto-rotate
-    globe.controls().autoRotate = true;
-    globe.controls().autoRotateSpeed = 1.2;
-    globe.controls().enableZoom = false;
-    globe.controls().enablePan = false;
-    globe.controls().enableRotate = false;
-    
-    // Set initial view
-    globe.pointOfView({ lat: 20, lng: 0, altitude: 2.5 });
-    
-    // Handle resize
-    const resizeObserver = new ResizeObserver(() => {
-      globe.width(mountEl.clientWidth);
-      globe.height(mountEl.clientHeight);
+    const map = new maplibregl.Map({
+      container: mountEl,
+      style: {
+        version: 8,
+        sources: {
+          countries: {
+            type: 'geojson',
+            data: import.meta.env.BASE_URL + 'data/50m.geojson'
+          }
+        },
+        layers: [
+          {
+            id: 'background',
+            type: 'background',
+            paint: { 'background-color': 'rgba(0,0,0,0)' }
+          },
+          {
+            id: 'country-fills',
+            type: 'fill',
+            source: 'countries',
+            paint: {
+              'fill-color': 'rgba(139, 92, 246, 0.4)',
+              'fill-opacity': 0.8
+            }
+          },
+          {
+            id: 'country-borders',
+            type: 'line',
+            source: 'countries',
+            paint: {
+              'line-color': 'rgba(139, 92, 246, 0.8)',
+              'line-width': 1
+            }
+          }
+        ]
+      },
+      center: [0, 20],
+      zoom: 0.5,
+      interactive: false
     });
-    resizeObserver.observe(mountEl);
+    
+    map.on('style.load', () => {
+      map.setProjection({ type: 'globe' });
+      
+      // Auto rotate
+      let currentLng = 0;
+      function rotate() {
+        currentLng += 0.5;
+        if (currentLng > 180) currentLng -= 360;
+        map.setCenter([currentLng, 20]);
+        requestAnimationFrame(rotate);
+      }
+      rotate();
+    });
     
   } catch (e) {
     console.warn('[Roamero] Could not load hero globe:', e);

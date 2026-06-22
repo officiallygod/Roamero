@@ -1,23 +1,22 @@
 /**
  * Roamero — Map Page
- * Interactive 3D globe with country/city tracking
+ * Interactive globe and map tracking using MapLibre GL JS
  */
 import '../styles/map.css';
+import 'maplibre-gl/dist/maplibre-gl.css';
 import { createThemeToggle } from '../components/theme-toggle.js';
 import { initCookieConsent } from '../components/cookie-consent.js';
 import {
   getVisits, markCountryVisited, unmarkCountryVisited,
   markCityVisited, unmarkCityVisited, isCountryVisited, isCityVisited,
-  getStats, getSearchHistory, addSearchHistory, getPreferences, getVisitedCitiesForCountry
+  getSearchHistory, addSearchHistory, getPreferences, getVisitedCitiesForCountry
 } from '../services/storage.js';
 import { debounce, formatDate, getContinentColor } from '../utils/helpers.js';
-import * as THREE from 'three';
-let globeInstance = null;
+import maplibregl from 'maplibre-gl';
+
+let mapInstance = null;
 let fuseInstance = null;
 let countriesData = null;
-let geo110m = null;
-let geo50m = null;
-let currentGeoJson = null;
 let themeObserver = null;
 let currentSidePanel = null;
 
@@ -27,10 +26,10 @@ export async function renderMap(container, router) {
       <!-- Loading State -->
       <div class="globe-loading" id="globe-loading">
         <div class="globe-loading-spinner"></div>
-        <div class="globe-loading-text">Loading globe...</div>
+        <div class="globe-loading-text">Initializing Engine...</div>
       </div>
       
-      <!-- Globe Mount -->
+      <!-- Map Mount -->
       <div class="globe-container" id="globe-mount"></div>
       
       <!-- Top Bar -->
@@ -76,8 +75,8 @@ export async function renderMap(container, router) {
   // Init cookie consent
   initCookieConsent();
   
-  // Load data and init globe
-  await initGlobe(container);
+  // Load data and init map
+  await initMap(container);
   initSearch(container);
   initSidePanelEvents(container);
   
@@ -99,13 +98,7 @@ export async function renderMap(container, router) {
   themeObserver = new MutationObserver((mutations) => {
     mutations.forEach((mutation) => {
       if (mutation.attributeName === 'data-theme') {
-        const isDark = document.documentElement.dataset.theme === 'dark';
-        if (globeInstance) {
-          globeInstance.globeMaterial().color.set(isDark ? '#1a1625' : '#e6e1f0');
-          globeInstance.atmosphereColor(isDark ? 'rgba(139, 92, 246, 0.15)' : 'rgba(124, 58, 237, 0.1)');
-          globeInstance.labelColor(() => isDark ? 'rgba(255, 255, 255, 0.6)' : 'rgba(0, 0, 0, 0.6)');
-          refreshGlobe(container);
-        }
+        refreshMap();
       }
     });
   });
@@ -115,286 +108,180 @@ export async function renderMap(container, router) {
     destroy() {
       if (themeObserver) themeObserver.disconnect();
       document.removeEventListener('keydown', handleKeydown);
-      if (globeInstance) {
-        // globe.gl doesn't have a clean destroy, so we just clear the container
-        const mount = container.querySelector('#globe-mount');
-        if (mount) mount.innerHTML = '';
-        globeInstance = null;
+      if (mapInstance) {
+        mapInstance.remove();
+        mapInstance = null;
       }
     }
   };
 }
 
-let gradientMaterial;
-let unvisitedMaterialDark;
-let unvisitedMaterialLight;
-
-function getGradientMaterial() {
-  if (gradientMaterial) return gradientMaterial;
-  const canvas = document.createElement('canvas');
-  canvas.width = 256;
-  canvas.height = 256;
-  const context = canvas.getContext('2d');
+/**
+ * Generate MapLibre Style Object dynamically based on visits and theme
+ */
+function getMapStyle(isDark, visits) {
+  const visitedIsos = Object.keys(visits.countries);
+  const matchExpr = ['match', ['get', 'ISO_A2']];
   
-  const gradient = context.createLinearGradient(0, 0, 256, 256);
-  gradient.addColorStop(0, '#8b5cf6'); // Purple
-  gradient.addColorStop(0.5, '#ec4899'); // Pink
-  gradient.addColorStop(1, '#f59e0b'); // Orange
-  
-  context.fillStyle = gradient;
-  context.fillRect(0, 0, 256, 256);
-  
-  const texture = new THREE.CanvasTexture(canvas);
-  gradientMaterial = new THREE.MeshBasicMaterial({ map: texture, transparent: true, opacity: 0.95 });
-  return gradientMaterial;
-}
-
-function getUnvisitedMaterial(isDark) {
-  if (isDark) {
-    if (!unvisitedMaterialDark) unvisitedMaterialDark = new THREE.MeshBasicMaterial({ color: '#1e1842', transparent: true, opacity: 0.6 });
-    return unvisitedMaterialDark;
+  if (visitedIsos.length === 0) {
+    matchExpr.push('NONE', '#8b5cf6', isDark ? '#1e1842' : '#c8bee6'); // Default fallback
   } else {
-    if (!unvisitedMaterialLight) unvisitedMaterialLight = new THREE.MeshBasicMaterial({ color: '#c8bee6', transparent: true, opacity: 0.5 });
-    return unvisitedMaterialLight;
+    visitedIsos.forEach(iso => {
+       const country = countriesData.COUNTRIES.find(c => c.id === iso);
+       const color = getContinentColor(country ? country.continent : 'Europe');
+       matchExpr.push(iso, color);
+    });
+    matchExpr.push(isDark ? '#1e1842' : '#c8bee6'); // Default unvisited
   }
+
+  return {
+    version: 8,
+    glyphs: "https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf",
+    sources: {
+      countries: {
+        type: 'geojson',
+        data: import.meta.env.BASE_URL + 'data/50m.geojson'
+      }
+    },
+    layers: [
+      {
+        id: 'background',
+        type: 'background',
+        paint: {
+          'background-color': isDark ? '#0f0a1e' : '#f0ecf9'
+        }
+      },
+      {
+        id: 'country-fills',
+        type: 'fill',
+        source: 'countries',
+        paint: {
+          'fill-color': matchExpr,
+          'fill-opacity': isDark ? 0.8 : 0.6
+        }
+      },
+      {
+        id: 'country-borders',
+        type: 'line',
+        source: 'countries',
+        paint: {
+          'line-color': isDark ? 'rgba(139, 92, 246, 0.4)' : 'rgba(124, 58, 237, 0.4)',
+          'line-width': 1
+        }
+      },
+      {
+        id: 'country-labels',
+        type: 'symbol',
+        source: 'countries',
+        minzoom: 1.5,
+        layout: {
+          'text-field': ['get', 'NAME'],
+          'text-font': ['Open Sans Regular'],
+          'text-size': 13,
+          'text-variable-anchor': ['center', 'top', 'bottom', 'left', 'right'],
+          'text-justify': 'center'
+        },
+        paint: {
+          'text-color': isDark ? '#ffffff' : '#111111',
+          'text-halo-color': isDark ? 'rgba(0,0,0,0.8)' : 'rgba(255,255,255,0.8)',
+          'text-halo-width': 1.5
+        }
+      }
+    ]
+  };
 }
 
 // ============================================
-// Globe Initialization
+// Map Initialization
 // ============================================
-async function initGlobe(container) {
+async function initMap(container) {
   const mountEl = container.querySelector('#globe-mount');
   const loadingEl = container.querySelector('#globe-loading');
   
   try {
-    // Load dependencies in parallel
-    const baseUrl = import.meta.env.BASE_URL;
-    const [Globe, countries, res110m, res50m] = await Promise.all([
-      import('globe.gl').then(m => m.default),
-      import('../data/countries.js').then(m => m),
-      fetch(`${baseUrl}data/110m.geojson`).then(r => r.json()).catch(() => null),
-      fetch(`${baseUrl}data/50m.geojson`).then(r => r.json()).catch(() => null)
-    ]);
-    
-    countriesData = countries;
-    geo110m = res110m;
-    geo50m = res50m;
-    currentGeoJson = geo110m || geo50m;
+    // Load countries data
+    const m = await import('../data/countries.js');
+    countriesData = m;
     
     const visits = getVisits();
     const prefs = getPreferences();
     const isDark = prefs.theme === 'dark';
     
-    // Create globe
-    const globe = Globe()
-      .backgroundColor('rgba(0,0,0,0)')
-      .showAtmosphere(true)
-      .atmosphereColor(isDark ? 'rgba(139, 92, 246, 0.15)' : 'rgba(124, 58, 237, 0.1)')
-      .atmosphereAltitude(0.15)
-      .width(window.innerWidth)
-      .height(window.innerHeight)
-      (mountEl);
+    mapInstance = new maplibregl.Map({
+      container: mountEl,
+      style: getMapStyle(isDark, visits),
+      center: [10, 20],
+      zoom: 1,
+      minZoom: 0.5,
+      maxZoom: 10,
+      interactive: true,
+      pitchWithRotate: false,
+      dragRotate: false
+    });
+    
+    mapInstance.on('style.load', () => {
+      // Enable the highly requested Google-Maps style Globe projection!
+      mapInstance.setProjection({
+        type: 'globe'
+      });
       
-    globe.globeMaterial().color.set(isDark ? '#1a1625' : '#e6e1f0');
-    globe.hexPolygonTransitionDuration(0);
-    globe.pointTransitionDuration(0);
-    
-    globeInstance = globe;
-    
-    // Add GeoJSON hex polygon layer for countries (Start with 110m for fast load)
-    if (currentGeoJson) {
-      globe
-        .hexPolygonsData(currentGeoJson.features)
-        .hexPolygonResolution(3)
-        .hexPolygonMargin(0.3)
-        .hexPolygonUseDots(true)
-        .hexPolygonAltitude(d => {
-          const iso = d.properties.ISO_A2;
-          return visits.countries[iso] ? 0.015 : 0.005;
-        })
-        .hexPolygonColor(d => {
-          const iso = d.properties.ISO_A2;
-          if (visits.countries[iso]) {
-            const country = countries.COUNTRIES.find(c => c.id === iso);
-            const continent = country ? country.continent : 'Europe';
-            return getContinentColor(continent);
-          }
-          return isDark ? 'rgba(139, 92, 246, 0.4)' : 'rgba(124, 58, 237, 0.4)';
-        })
-        .hexPolygonLabel(d => {
-          const iso = d.properties.ISO_A2;
-          const name = d.properties.NAME || d.properties.ADMIN;
-          const visited = visits.countries[iso];
-          return `
-            <div style="
-              background: rgba(15, 10, 30, 0.9);
-              backdrop-filter: blur(10px);
-              padding: 8px 14px;
-              border-radius: 10px;
-              border: 1px solid rgba(139, 92, 246, 0.3);
-              font-family: 'Inter', sans-serif;
-              color: #f0ecf9;
-              font-size: 13px;
-              box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-            ">
-              <div style="font-weight: 600; margin-bottom: 2px;">${name}</div>
-              ${visited
-                ? `<div style="color: #34d399; font-size: 11px;">✓ Visited · ${formatDate(visited.visitedAt)}</div>`
-                : `<div style="color: #7b6f9e; font-size: 11px;">Not yet visited</div>`
-              }
-            </div>
-          `;
-        })
-        .onHexPolygonClick(d => {
-          const iso = d.properties.ISO_A2;
-          const country = countries.COUNTRIES.find(c => c.id === iso);
-          if (country) {
-            if (isCountryVisited(country.id)) {
-              unmarkCountryVisited(country.id);
-              showToast(container, `❌ ${country.name} unmarked`);
-            } else {
-              markCountryVisited(country.id);
-              showToast(container, `✅ ${country.name} marked as visited!`);
+      // Hide loading
+      if (loadingEl) {
+        loadingEl.style.opacity = '0';
+        setTimeout(() => loadingEl.remove(), 300);
+      }
+      
+      // Attempt IP Geolocation
+      fetch('https://ipapi.co/json/')
+        .then(r => r.json())
+        .then(data => {
+          if (data && data.country_code && countriesData) {
+            const country = countriesData.COUNTRIES.find(c => c.id === data.country_code);
+            if (country) {
+              mapInstance.flyTo({ center: [country.lng, country.lat], zoom: 3, duration: 2500 });
             }
-            refreshGlobe(container);
           }
         })
-        .onHexPolygonHover(d => {
-          if (d) {
-            mountEl.style.cursor = 'pointer';
-          } else {
-            mountEl.style.cursor = 'grab';
-          }
-        });
-        
-      // Configure CSS3D HTML Labels
-      globe.htmlElement(d => {
-        const el = document.createElement('div');
-        el.innerHTML = d.name;
-        el.style.color = isDark ? 'rgba(255, 255, 255, 0.85)' : 'rgba(0, 0, 0, 0.85)';
-        el.style.fontFamily = "'Inter', sans-serif";
-        el.style.fontSize = '12px';
-        el.style.fontWeight = '600';
-        el.style.textShadow = isDark 
-          ? '0 1px 4px rgba(0,0,0,0.8)' 
-          : '0 1px 4px rgba(255,255,255,0.8)';
-        el.style.pointerEvents = 'none'; // Prevent blocking hover raycasts
-        el.style.userSelect = 'none';
-        el.style.whiteSpace = 'nowrap';
-        el.style.opacity = '0';
-        el.style.transition = 'opacity 0.4s ease';
-        setTimeout(() => el.style.opacity = '1', 50); // Fade in
-        return el;
-      });
-        
-      // Level of Detail (LOD) Camera Listener & Culling
-      let currentLod = 'low';
+        .catch(() => console.log('[Roamero] IP Geolocation bypassed'));
+    });
+    
+    // Interactions
+    mapInstance.on('click', 'country-fills', (e) => {
+      const feature = e.features[0];
+      if (!feature) return;
+      const iso = feature.properties.ISO_A2;
+      const country = countriesData.COUNTRIES.find(c => c.id === iso);
       
-      // Disable interaction initially to save raycast CPU cycles
-      globe.enablePointerInteraction(false);
-      
-      globe.controls().addEventListener('change', () => {
-        const dist = globe.controls().getDistance();
+      if (country) {
+        if (isCountryVisited(country.id)) {
+          unmarkCountryVisited(country.id);
+          showToast(container, `❌ ${country.name} unmarked`);
+        } else {
+          markCountryVisited(country.id);
+          showToast(container, `✅ ${country.name} marked as visited!`);
+        }
+        refreshMap();
         
-        // Use a tighter threshold for hex and labels
-        if (dist < 180 && currentLod === 'low' && geo50m) {
-          currentLod = 'high';
-          currentGeoJson = geo50m;
-          globe.hexPolygonsData(geo50m.features);
-          globe.enablePointerInteraction(true);
-        } else if (dist >= 180 && currentLod === 'high' && geo110m) {
-          currentLod = 'low';
-          currentGeoJson = geo110m;
-          globe.hexPolygonsData(geo110m.features);
-          globe.enablePointerInteraction(false);
-          globe.htmlElementsData([]); 
-        }
-        
-        // Strict frustum culling for labels (only when zoomed in)
-        if (currentLod === 'high') {
-          const pov = globe.pointOfView();
-          const povVec = new THREE.Vector3().setFromSphericalCoords(
-            1, 
-            THREE.MathUtils.degToRad(90 - pov.lat), 
-            THREE.MathUtils.degToRad(pov.lng)
-          );
-          
-          const culledLabels = geo50m.features
-            .filter(f => f.properties.LABEL_Y && f.properties.LABEL_X)
-            .filter(f => {
-              const labelVec = new THREE.Vector3().setFromSphericalCoords(
-                1, 
-                THREE.MathUtils.degToRad(90 - f.properties.LABEL_Y), 
-                THREE.MathUtils.degToRad(f.properties.LABEL_X)
-              );
-              return povVec.dot(labelVec) > 0.45; // Only front 60-degree cone
-            })
-            .map(f => ({
-              lat: f.properties.LABEL_Y,
-              lng: f.properties.LABEL_X,
-              name: f.properties.NAME
-            }));
-          globe.htmlElementsData(culledLabels);
-        }
-      });
-    }
-    
-    // Add city points for visited cities
-    addCityPoints(globe, countries, visits);
-    
-    // Globe controls
-    globe.controls().autoRotate = false; // Disabled for performance
-    globe.controls().autoRotateSpeed = 0.5;
-    globe.controls().enableDamping = true;
-    globe.controls().dampingFactor = 0.1;
-    globe.controls().rotateSpeed = 0.8;
-    globe.controls().zoomSpeed = 1;
-    globe.controls().minDistance = 120;
-    globe.controls().maxDistance = 500;
-    
-    // Set initial view and fetch geolocation
-    globe.pointOfView({ lat: 20, lng: 10, altitude: 2.2 });
-    
-    fetch('https://ipapi.co/json/')
-      .then(r => r.json())
-      .then(data => {
-        if (data && data.country_code && countriesData) {
-          const country = countriesData.COUNTRIES.find(c => c.id === data.country_code);
-          if (country && globeInstance) {
-            // Zoom right into the user's home country
-            globeInstance.pointOfView({ lat: country.lat, lng: country.lng, altitude: 0.8 }, 1500);
-          }
-        }
-      })
-      .catch(() => console.log('[Roamero] IP Geolocation bypassed'));
-    
-    // Stop auto-rotate on user interaction
-    mountEl.addEventListener('mousedown', () => {
-      globe.controls().autoRotate = false;
+        // Open side panel
+        setTimeout(() => openSidePanel(container, country), 200);
+      }
     });
-    mountEl.addEventListener('touchstart', () => {
-      globe.controls().autoRotate = false;
+
+    mapInstance.on('mouseenter', 'country-fills', () => {
+      mapInstance.getCanvas().style.cursor = 'pointer';
     });
     
-    // Handle resize
-    window.addEventListener('resize', () => {
-      globe.width(window.innerWidth);
-      globe.height(window.innerHeight);
+    mapInstance.on('mouseleave', 'country-fills', () => {
+      mapInstance.getCanvas().style.cursor = '';
     });
-    
-    // Hide loading
-    if (loadingEl) {
-      loadingEl.style.opacity = '0';
-      setTimeout(() => loadingEl.remove(), 300);
-    }
     
   } catch (err) {
-    console.error('[Roamero] Failed to initialize globe:', err);
+    console.error('[Roamero] Failed to initialize map:', err);
     if (loadingEl) {
       loadingEl.innerHTML = `
         <div style="text-align: center; color: var(--color-text-secondary);">
           <div style="font-size: 48px; margin-bottom: 16px;">🌍</div>
-          <div>Could not load the globe.</div>
+          <div>Could not load the map engine.</div>
           <div style="font-size: 13px; margin-top: 8px; color: var(--color-text-muted);">${err.message}</div>
           <button class="btn btn-primary" style="margin-top: 16px;" onclick="location.reload()">Retry</button>
         </div>
@@ -404,82 +291,13 @@ async function initGlobe(container) {
 }
 
 /**
- * Add city point markers to the globe
+ * Refresh Map Style based on visits
  */
-function addCityPoints(globe, countries, visits) {
-  // Show visited cities as points on the globe
-  const visitedCityIds = Object.keys(visits.cities);
-  if (visitedCityIds.length === 0) return;
-  
-  const cityPoints = [];
-  countries.COUNTRIES.forEach(country => {
-    country.cities.forEach(city => {
-      if (visits.cities[city.id]) {
-        cityPoints.push({
-          lat: city.lat,
-          lng: city.lng,
-          name: city.name,
-          countryName: country.name,
-          size: 0.06,
-          color: getContinentColor(country.continent),
-        });
-      }
-    });
-  });
-  
-  if (cityPoints.length > 0) {
-    globe
-      .pointsData(cityPoints)
-      .pointAltitude('size')
-      .pointColor('color')
-      .pointRadius(0.3)
-      .pointLabel(d => `
-        <div style="
-          background: rgba(15, 10, 30, 0.9);
-          backdrop-filter: blur(10px);
-          padding: 6px 12px;
-          border-radius: 8px;
-          border: 1px solid rgba(139, 92, 246, 0.3);
-          font-family: 'Inter', sans-serif;
-          color: #f0ecf9;
-          font-size: 12px;
-        ">
-          <div style="font-weight: 600;">📍 ${d.name}</div>
-          <div style="color: #a89cc8; font-size: 11px;">${d.countryName}</div>
-        </div>
-      `);
-  }
-}
-
-/**
- * Refresh the globe colors and data after a visit change
- */
-function refreshGlobe(container) {
-  if (!globeInstance || !currentGeoJson || !countriesData) return;
-  
-  const visits = getVisits();
+function refreshMap() {
+  if (!mapInstance || !mapInstance.isStyleLoaded()) return;
   const isDark = document.documentElement.dataset.theme === 'dark';
-  
-  // Re-trigger polygon rendering
-  globeInstance.hexPolygonsData(currentGeoJson.features);
-  
-  globeInstance
-    .hexPolygonAltitude(d => {
-      const iso = d.properties.ISO_A2;
-      return visits.countries[iso] ? 0.015 : 0.005;
-    })
-    .hexPolygonColor(d => {
-      const iso = d.properties.ISO_A2;
-      if (visits.countries[iso]) {
-        const country = countriesData.COUNTRIES.find(c => c.id === iso);
-        const continent = country ? country.continent : 'Europe';
-        return getContinentColor(continent);
-      }
-      return isDark ? 'rgba(139, 92, 246, 0.4)' : 'rgba(124, 58, 237, 0.4)';
-    });
-  
-  // Refresh city points
-  addCityPoints(globeInstance, countriesData, visits);
+  const visits = getVisits();
+  mapInstance.setStyle(getMapStyle(isDark, visits));
 }
 
 // ============================================
@@ -491,7 +309,6 @@ function initSearch(container) {
   const clearBtn = container.querySelector('#search-clear');
   let activeIndex = -1;
   
-  // Init Fuse.js
   import('fuse.js').then(Fuse => {
     const FuseClass = Fuse.default || Fuse;
     if (countriesData && countriesData.ALL_PLACES) {
@@ -560,11 +377,8 @@ function initSearch(container) {
     results.classList.add('visible');
     activeIndex = 0;
     
-    // Click handlers for results
     results.querySelectorAll('.search-result-item').forEach(el => {
-      el.addEventListener('click', () => {
-        selectSearchResult(container, el);
-      });
+      el.addEventListener('click', () => selectSearchResult(container, el));
     });
   }, 150);
   
@@ -582,7 +396,6 @@ function initSearch(container) {
     input.focus();
   });
   
-  // Keyboard navigation
   input.addEventListener('keydown', (e) => {
     const items = results.querySelectorAll('.search-result-item');
     if (!items.length) return;
@@ -601,7 +414,6 @@ function initSearch(container) {
     }
   });
   
-  // Close results when clicking outside
   document.addEventListener('click', (e) => {
     if (!container.querySelector('#search-wrapper')?.contains(e.target)) {
       results.classList.remove('visible');
@@ -617,25 +429,21 @@ function selectSearchResult(container, el) {
   const countryId = el.dataset.countryId;
   const name = el.querySelector('.search-result-name').textContent;
   
-  // Save to search history
   addSearchHistory(name);
   
-  // Close search
   container.querySelector('#search-results').classList.remove('visible');
   container.querySelector('#search-input').value = name;
   container.querySelector('#search-input').blur();
   
-  // Fly to location
-  if (globeInstance) {
-    globeInstance.pointOfView({ lat, lng, altitude: type === 'city' ? 0.8 : 1.5 }, 1000);
+  if (mapInstance) {
+    mapInstance.flyTo({ center: [lng, lat], zoom: type === 'city' ? 6 : 3, duration: 1500 });
   }
   
-  // Open side panel for country
   if (countriesData) {
     const cId = type === 'country' ? id : countryId;
     const country = countriesData.COUNTRIES.find(c => c.id === cId);
     if (country) {
-      setTimeout(() => openSidePanel(container, country), 500);
+      setTimeout(() => openSidePanel(container, country), 800);
     }
   }
 }
@@ -724,12 +532,10 @@ function openSidePanel(container, country) {
   panel.classList.add('open');
   overlay.classList.add('visible');
   
-  // Close button
   panel.querySelector('#side-panel-close').addEventListener('click', () => {
     closeSidePanel(container);
   });
   
-  // Country visit toggle
   panel.querySelector('#country-visit-toggle').addEventListener('click', () => {
     if (isCountryVisited(country.id)) {
       unmarkCountryVisited(country.id);
@@ -738,20 +544,18 @@ function openSidePanel(container, country) {
       markCountryVisited(country.id);
       showToast(container, `✅ ${country.name} marked as visited!`);
     }
-    refreshGlobe(container);
-    openSidePanel(container, country); // Re-render
+    refreshMap();
+    openSidePanel(container, country);
   });
   
-  // Country date change
   const dateInput = panel.querySelector('#country-visit-date');
   if (dateInput) {
     dateInput.addEventListener('change', (e) => {
       markCountryVisited(country.id, e.target.value);
-      refreshGlobe(container);
+      refreshMap();
     });
   }
   
-  // City click handlers
   panel.querySelectorAll('.city-item').forEach(el => {
     el.addEventListener('click', () => {
       const cityId = el.dataset.cityId;
@@ -762,16 +566,15 @@ function openSidePanel(container, country) {
         markCityVisited(cityId, country.id);
         showToast(container, `📍 City marked as visited!`);
       }
-      refreshGlobe(container);
-      openSidePanel(container, country); // Re-render
+      refreshMap();
+      openSidePanel(container, country);
     });
     
-    // Fly to city on double-click
     el.addEventListener('dblclick', () => {
       const cityId = el.dataset.cityId;
       const city = country.cities.find(c => c.id === cityId);
-      if (city && globeInstance) {
-        globeInstance.pointOfView({ lat: city.lat, lng: city.lng, altitude: 0.5 }, 800);
+      if (city && mapInstance) {
+        mapInstance.flyTo({ center: [city.lng, city.lat], zoom: 6, duration: 1000 });
       }
     });
   });
@@ -783,11 +586,6 @@ function closeSidePanel(container) {
   currentSidePanel = null;
 }
 
-// Stats removed
-
-// ============================================
-// Toast
-// ============================================
 function showToast(container, message) {
   const toast = container.querySelector('#toast');
   if (!toast) return;
