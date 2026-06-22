@@ -220,8 +220,8 @@ async function initHeroGlobe(mountEl) {
             type: 'fill',
             source: 'countries',
             paint: {
-              'fill-color': 'rgba(139, 92, 246, 0.4)',
-              'fill-opacity': 0.8
+              'fill-color': isDark ? '#1a1a1a' : '#ffffff',
+              'fill-opacity': 1.0
             }
           },
           {
@@ -229,14 +229,15 @@ async function initHeroGlobe(mountEl) {
             type: 'line',
             source: 'countries',
             paint: {
-              'line-color': 'rgba(139, 92, 246, 0.8)',
-              'line-width': 1
+              'line-color': isDark ? '#333333' : '#e5e5e5',
+              'line-width': 0.8
             }
           }
         ]
       },
       center: [0, 20],
-      zoom: 0.5,
+      zoom: 1.5,
+      minZoom: 1.5,
       interactive: false
     });
     
