@@ -124,14 +124,14 @@ function getMapStyle(isDark, visits) {
   const matchExpr = ['match', ['get', 'ISO_A2']];
   
   if (visitedIsos.length === 0) {
-    matchExpr.push('NONE', '#8b5cf6', isDark ? '#1e1842' : '#c8bee6'); // Default fallback
+    matchExpr.push('NONE', '#8b5cf6', isDark ? '#221d30' : '#ffffff'); // Default fallback
   } else {
     visitedIsos.forEach(iso => {
        const country = countriesData.COUNTRIES.find(c => c.id === iso);
        const color = getContinentColor(country ? country.continent : 'Europe');
        matchExpr.push(iso, color);
     });
-    matchExpr.push(isDark ? '#1e1842' : '#c8bee6'); // Default unvisited
+    matchExpr.push(isDark ? '#221d30' : '#ffffff'); // Default unvisited (Pure white for light mode)
   }
 
   return {
@@ -140,7 +140,8 @@ function getMapStyle(isDark, visits) {
     sources: {
       countries: {
         type: 'geojson',
-        data: import.meta.env.BASE_URL + 'data/50m.geojson'
+        // Use 110m to remove small islands and unimportant tiny countries
+        data: import.meta.env.BASE_URL + 'data/110m.geojson'
       }
     },
     layers: [
@@ -148,7 +149,8 @@ function getMapStyle(isDark, visits) {
         id: 'background',
         type: 'background',
         paint: {
-          'background-color': isDark ? '#0f0a1e' : '#f0ecf9'
+          // Transparent to let the beautiful CSS gradient show through
+          'background-color': 'rgba(0,0,0,0)'
         }
       },
       {
@@ -157,7 +159,7 @@ function getMapStyle(isDark, visits) {
         source: 'countries',
         paint: {
           'fill-color': matchExpr,
-          'fill-opacity': isDark ? 0.8 : 0.6
+          'fill-opacity': 1.0
         }
       },
       {
@@ -165,26 +167,36 @@ function getMapStyle(isDark, visits) {
         type: 'line',
         source: 'countries',
         paint: {
-          'line-color': isDark ? 'rgba(139, 92, 246, 0.4)' : 'rgba(124, 58, 237, 0.4)',
-          'line-width': 1
+          // Very subtle, minimal borders
+          'line-color': isDark ? '#322b46' : '#e2e2e8',
+          'line-width': 0.8
         }
       },
       {
         id: 'country-labels',
         type: 'symbol',
         source: 'countries',
-        minzoom: 1.5,
+        minzoom: 3.5, // Only show when REALLY zoomed in
+        // Filter to only show major countries (population > 15 million)
+        // This ensures roughly ~5 labels on screen at any time
+        filter: ['>', ['get', 'POP_EST'], 15000000],
         layout: {
           'text-field': ['get', 'NAME'],
           'text-font': ['Open Sans Regular'],
-          'text-size': 13,
-          'text-variable-anchor': ['center', 'top', 'bottom', 'left', 'right'],
+          'text-size': 12,
+          'text-transform': 'uppercase',
+          'text-letter-spacing': 0.1,
+          'symbol-spacing': 500,
+          'text-padding': 20,
+          'text-allow-overlap': false,
+          'text-ignore-placement': false,
+          'text-variable-anchor': ['center'],
           'text-justify': 'center'
         },
         paint: {
-          'text-color': isDark ? '#ffffff' : '#111111',
-          'text-halo-color': isDark ? 'rgba(0,0,0,0.8)' : 'rgba(255,255,255,0.8)',
-          'text-halo-width': 1.5
+          'text-color': isDark ? '#8b7faf' : '#9fa3b0',
+          'text-halo-color': isDark ? '#221d30' : '#ffffff',
+          'text-halo-width': 2
         }
       }
     ]

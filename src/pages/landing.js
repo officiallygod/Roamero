@@ -206,7 +206,7 @@ async function initHeroGlobe(mountEl) {
         sources: {
           countries: {
             type: 'geojson',
-            data: import.meta.env.BASE_URL + 'data/50m.geojson'
+            data: import.meta.env.BASE_URL + 'data/110m.geojson'
           }
         },
         layers: [
