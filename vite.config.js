@@ -52,6 +52,17 @@ export default defineConfig({
             }
           },
           {
+            urlPattern: /^https:\/\/raw\.githubusercontent\.com\/.*/i,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'geojson-cache',
+              expiration: {
+                maxEntries: 10,
+                maxAgeSeconds: 60 * 60 * 24 * 30
+              }
+            }
+          },
+          {
             urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
             handler: 'StaleWhileRevalidate',
             options: {
@@ -79,6 +90,18 @@ export default defineConfig({
   build: {
     target: 'es2020',
     minify: 'esbuild',
-    sourcemap: false
+    sourcemap: false,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            if (id.includes('three')) return 'three';
+            if (id.includes('globe.gl')) return 'globe';
+            if (id.includes('fuse.js')) return 'fuse';
+            return 'vendor';
+          }
+        }
+      }
+    }
   }
 });

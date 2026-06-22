@@ -11,7 +11,7 @@ import {
   getStats, getSearchHistory, addSearchHistory, getPreferences, getVisitedCitiesForCountry
 } from '../services/storage.js';
 import { debounce, formatDate, getContinentColor } from '../utils/helpers.js';
-
+import * as THREE from 'three';
 let globeInstance = null;
 let fuseInstance = null;
 let countriesData = null;
@@ -32,11 +32,6 @@ export async function renderMap(container, router) {
       
       <!-- Top Bar -->
       <div class="map-topbar">
-        <div class="map-logo" id="map-logo">
-          <div class="map-logo-icon">🌍</div>
-          <span>Roamero</span>
-        </div>
-        
         <div class="search-wrapper" id="search-wrapper">
           <div class="search-input-container">
             <span class="search-icon">
@@ -60,32 +55,6 @@ export async function renderMap(container, router) {
         </div>
       </div>
       
-      <!-- Stats Panel -->
-      <div class="stats-panel" id="stats-panel">
-        <div class="stat-item">
-          <span class="stat-icon">🌎</span>
-          <div class="stat-info">
-            <span class="stat-value" id="stat-countries">0</span>
-            <span class="stat-label">Countries</span>
-          </div>
-        </div>
-        <div class="stat-divider"></div>
-        <div class="stat-item">
-          <span class="stat-icon">📍</span>
-          <div class="stat-info">
-            <span class="stat-value" id="stat-cities">0</span>
-            <span class="stat-label">Cities</span>
-          </div>
-        </div>
-        <div class="stat-divider"></div>
-        <div class="stat-item stat-progress">
-          <div class="stat-progress-bar">
-            <div class="stat-progress-fill" id="stat-progress-fill" style="width: 0%"></div>
-          </div>
-          <span class="stat-progress-text" id="stat-percentage">0%</span>
-        </div>
-      </div>
-      
       <!-- Side Panel Overlay -->
       <div class="side-panel-overlay" id="side-panel-overlay"></div>
       
@@ -101,11 +70,6 @@ export async function renderMap(container, router) {
   const mapActions = container.querySelector('#map-actions');
   mapActions.appendChild(createThemeToggle());
   
-  // Logo → back to landing
-  container.querySelector('#map-logo').addEventListener('click', () => {
-    router.navigate('/');
-  });
-  
   // Init cookie consent
   initCookieConsent();
   
@@ -113,7 +77,6 @@ export async function renderMap(container, router) {
   await initGlobe(container);
   initSearch(container);
   initSidePanelEvents(container);
-  updateStats(container);
   
   // Keyboard shortcut: "/" to focus search
   const handleKeydown = (e) => {
@@ -142,6 +105,40 @@ export async function renderMap(container, router) {
   };
 }
 
+let gradientMaterial;
+let unvisitedMaterialDark;
+let unvisitedMaterialLight;
+
+function getGradientMaterial() {
+  if (gradientMaterial) return gradientMaterial;
+  const canvas = document.createElement('canvas');
+  canvas.width = 256;
+  canvas.height = 256;
+  const context = canvas.getContext('2d');
+  
+  const gradient = context.createLinearGradient(0, 0, 256, 256);
+  gradient.addColorStop(0, '#8b5cf6'); // Purple
+  gradient.addColorStop(0.5, '#ec4899'); // Pink
+  gradient.addColorStop(1, '#f59e0b'); // Orange
+  
+  context.fillStyle = gradient;
+  context.fillRect(0, 0, 256, 256);
+  
+  const texture = new THREE.CanvasTexture(canvas);
+  gradientMaterial = new THREE.MeshBasicMaterial({ map: texture, transparent: true, opacity: 0.95 });
+  return gradientMaterial;
+}
+
+function getUnvisitedMaterial(isDark) {
+  if (isDark) {
+    if (!unvisitedMaterialDark) unvisitedMaterialDark = new THREE.MeshBasicMaterial({ color: '#1e1842', transparent: true, opacity: 0.6 });
+    return unvisitedMaterialDark;
+  } else {
+    if (!unvisitedMaterialLight) unvisitedMaterialLight = new THREE.MeshBasicMaterial({ color: '#c8bee6', transparent: true, opacity: 0.5 });
+    return unvisitedMaterialLight;
+  }
+}
+
 // ============================================
 // Globe Initialization
 // ============================================
@@ -154,7 +151,7 @@ async function initGlobe(container) {
     const [Globe, countries, geoJson] = await Promise.all([
       import('globe.gl').then(m => m.default),
       import('../data/countries.js').then(m => m),
-      fetch('https://unpkg.com/three-globe@2.41.12/example/img/ne_110m_admin_0_countries.geojson')
+      fetch('https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_50m_admin_0_countries.geojson')
         .then(r => r.json())
         .catch(() => null)
     ]);
@@ -168,16 +165,15 @@ async function initGlobe(container) {
     
     // Create globe
     const globe = Globe()
-      .globeImageUrl(isDark
-        ? 'https://unpkg.com/three-globe@2.41.12/example/img/earth-night.jpg'
-        : 'https://unpkg.com/three-globe@2.41.12/example/img/earth-blue-marble.jpg')
-      .bumpImageUrl('https://unpkg.com/three-globe@2.41.12/example/img/earth-topology.png')
       .backgroundColor('rgba(0,0,0,0)')
-      .atmosphereColor(isDark ? 'rgba(139, 92, 246, 0.25)' : 'rgba(124, 58, 237, 0.15)')
-      .atmosphereAltitude(0.18)
+      .showAtmosphere(true)
+      .atmosphereColor(isDark ? 'rgba(139, 92, 246, 0.15)' : 'rgba(124, 58, 237, 0.1)')
+      .atmosphereAltitude(0.15)
       .width(window.innerWidth)
       .height(window.innerHeight)
       (mountEl);
+      
+    globe.globeMaterial().color.set(isDark ? '#1a1625' : '#e6e1f0');
     
     globeInstance = globe;
     
@@ -189,15 +185,12 @@ async function initGlobe(container) {
           const iso = d.properties.ISO_A2;
           return visits.countries[iso] ? 0.02 : 0.005;
         })
-        .polygonCapColor(d => {
+        .polygonCapMaterial(d => {
           const iso = d.properties.ISO_A2;
           if (visits.countries[iso]) {
-            // Visited: vibrant gradient based on continent
-            const country = countries.COUNTRIES.find(c => c.id === iso);
-            const continent = country ? country.continent : 'Europe';
-            return getContinentColor(continent) + 'cc'; // with alpha
+            return getGradientMaterial();
           }
-          return isDark ? 'rgba(30, 24, 66, 0.6)' : 'rgba(200, 190, 230, 0.5)';
+          return getUnvisitedMaterial(isDark);
         })
         .polygonSideColor(() => isDark ? 'rgba(139, 92, 246, 0.08)' : 'rgba(124, 58, 237, 0.06)')
         .polygonStrokeColor(() => isDark ? 'rgba(139, 92, 246, 0.25)' : 'rgba(124, 58, 237, 0.2)')
@@ -229,9 +222,14 @@ async function initGlobe(container) {
           const iso = d.properties.ISO_A2;
           const country = countries.COUNTRIES.find(c => c.id === iso);
           if (country) {
-            openSidePanel(container, country);
-            // Fly to country
-            globe.pointOfView({ lat: country.lat, lng: country.lng, altitude: 1.5 }, 1000);
+            if (isCountryVisited(country.id)) {
+              unmarkCountryVisited(country.id);
+              showToast(container, `❌ ${country.name} unmarked`);
+            } else {
+              markCountryVisited(country.id);
+              showToast(container, `✅ ${country.name} marked as visited!`);
+            }
+            refreshGlobe(container);
           }
         })
         .onPolygonHover(d => {
@@ -241,6 +239,17 @@ async function initGlobe(container) {
             mountEl.style.cursor = 'grab';
           }
         });
+        
+      // Add HD Country Names on the globe
+      globe
+        .labelsData(geoJson.features)
+        .labelLat(d => d.properties.LABEL_Y)
+        .labelLng(d => d.properties.LABEL_X)
+        .labelText(d => d.properties.NAME)
+        .labelSize(0.8)
+        .labelDotRadius(0.1)
+        .labelColor(() => isDark ? 'rgba(255, 255, 255, 0.6)' : 'rgba(0, 0, 0, 0.6)')
+        .labelResolution(2);
     }
     
     // Add city points for visited cities
@@ -360,21 +369,16 @@ function refreshGlobe(container) {
       const iso = d.properties.ISO_A2;
       return visits.countries[iso] ? 0.02 : 0.005;
     })
-    .polygonCapColor(d => {
+    .polygonCapMaterial(d => {
       const iso = d.properties.ISO_A2;
       if (visits.countries[iso]) {
-        const country = countriesData.COUNTRIES.find(c => c.id === iso);
-        const continent = country ? country.continent : 'Europe';
-        return getContinentColor(continent) + 'cc';
+        return getGradientMaterial();
       }
-      return isDark ? 'rgba(30, 24, 66, 0.6)' : 'rgba(200, 190, 230, 0.5)';
+      return getUnvisitedMaterial(isDark);
     });
   
   // Refresh city points
   addCityPoints(globeInstance, countriesData, visits);
-  
-  // Update stats
-  updateStats(container);
 }
 
 // ============================================
@@ -678,24 +682,7 @@ function closeSidePanel(container) {
   currentSidePanel = null;
 }
 
-// ============================================
-// Stats
-// ============================================
-function updateStats(container) {
-  const totalCountries = countriesData ? countriesData.COUNTRIES.length : 195;
-  const totalCities = countriesData ? countriesData.COUNTRIES.reduce((sum, c) => sum + c.cities.length, 0) : 1950;
-  const stats = getStats(totalCountries, totalCities);
-  
-  const countriesEl = container.querySelector('#stat-countries');
-  const citiesEl = container.querySelector('#stat-cities');
-  const progressFill = container.querySelector('#stat-progress-fill');
-  const percentageEl = container.querySelector('#stat-percentage');
-  
-  if (countriesEl) countriesEl.textContent = `${stats.countriesVisited}/${stats.totalCountries}`;
-  if (citiesEl) citiesEl.textContent = `${stats.citiesVisited}/${stats.totalCities}`;
-  if (progressFill) progressFill.style.width = `${stats.countryPercentage}%`;
-  if (percentageEl) percentageEl.textContent = `${stats.countryPercentage}%`;
-}
+// Stats removed
 
 // ============================================
 // Toast
