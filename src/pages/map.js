@@ -196,27 +196,32 @@ async function initGlobe(container) {
       (mountEl);
       
     globe.globeMaterial().color.set(isDark ? '#1a1625' : '#e6e1f0');
+    globe.hexPolygonTransitionDuration(0);
+    globe.pointTransitionDuration(0);
     
     globeInstance = globe;
     
-    // Add GeoJSON polygon layer for countries (Start with 110m for fast load)
+    // Add GeoJSON hex polygon layer for countries (Start with 110m for fast load)
     if (currentGeoJson) {
       globe
-        .polygonsData(currentGeoJson.features)
-        .polygonAltitude(d => {
+        .hexPolygonsData(currentGeoJson.features)
+        .hexPolygonResolution(3)
+        .hexPolygonMargin(0.3)
+        .hexPolygonUseDots(true)
+        .hexPolygonAltitude(d => {
           const iso = d.properties.ISO_A2;
-          return visits.countries[iso] ? 0.02 : 0.005;
+          return visits.countries[iso] ? 0.015 : 0.005;
         })
-        .polygonCapMaterial(d => {
+        .hexPolygonColor(d => {
           const iso = d.properties.ISO_A2;
           if (visits.countries[iso]) {
-            return getGradientMaterial();
+            const country = countries.COUNTRIES.find(c => c.id === iso);
+            const continent = country ? country.continent : 'Europe';
+            return getContinentColor(continent);
           }
-          return getUnvisitedMaterial(isDark);
+          return isDark ? 'rgba(139, 92, 246, 0.4)' : 'rgba(124, 58, 237, 0.4)';
         })
-        .polygonSideColor(() => isDark ? 'rgba(139, 92, 246, 0.08)' : 'rgba(124, 58, 237, 0.06)')
-        .polygonStrokeColor(() => isDark ? 'rgba(139, 92, 246, 0.25)' : 'rgba(124, 58, 237, 0.2)')
-        .polygonLabel(d => {
+        .hexPolygonLabel(d => {
           const iso = d.properties.ISO_A2;
           const name = d.properties.NAME || d.properties.ADMIN;
           const visited = visits.countries[iso];
@@ -240,7 +245,7 @@ async function initGlobe(container) {
             </div>
           `;
         })
-        .onPolygonClick(d => {
+        .onHexPolygonClick(d => {
           const iso = d.properties.ISO_A2;
           const country = countries.COUNTRIES.find(c => c.id === iso);
           if (country) {
@@ -254,7 +259,7 @@ async function initGlobe(container) {
             refreshGlobe(container);
           }
         })
-        .onPolygonHover(d => {
+        .onHexPolygonHover(d => {
           if (d) {
             mountEl.style.cursor = 'pointer';
           } else {
@@ -291,30 +296,45 @@ async function initGlobe(container) {
       globe.controls().addEventListener('change', () => {
         const dist = globe.controls().getDistance();
         
-        // When zoomed in: enable raycasting, show HD polygons, show HTML labels
-        if (dist < 220 && currentLod === 'low' && geo50m) {
+        // Use a tighter threshold for hex and labels
+        if (dist < 180 && currentLod === 'low' && geo50m) {
           currentLod = 'high';
           currentGeoJson = geo50m;
-          globe.polygonsData(geo50m.features);
+          globe.hexPolygonsData(geo50m.features);
           globe.enablePointerInteraction(true);
+        } else if (dist >= 180 && currentLod === 'high' && geo110m) {
+          currentLod = 'low';
+          currentGeoJson = geo110m;
+          globe.hexPolygonsData(geo110m.features);
+          globe.enablePointerInteraction(false);
+          globe.htmlElementsData([]); 
+        }
+        
+        // Strict frustum culling for labels (only when zoomed in)
+        if (currentLod === 'high') {
+          const pov = globe.pointOfView();
+          const povVec = new THREE.Vector3().setFromSphericalCoords(
+            1, 
+            THREE.MathUtils.degToRad(90 - pov.lat), 
+            THREE.MathUtils.degToRad(pov.lng)
+          );
           
-          // Map GeoJSON to flat array for HTML elements
-          const htmlLabels = geo50m.features
+          const culledLabels = geo50m.features
             .filter(f => f.properties.LABEL_Y && f.properties.LABEL_X)
+            .filter(f => {
+              const labelVec = new THREE.Vector3().setFromSphericalCoords(
+                1, 
+                THREE.MathUtils.degToRad(90 - f.properties.LABEL_Y), 
+                THREE.MathUtils.degToRad(f.properties.LABEL_X)
+              );
+              return povVec.dot(labelVec) > 0.45; // Only front 60-degree cone
+            })
             .map(f => ({
               lat: f.properties.LABEL_Y,
               lng: f.properties.LABEL_X,
               name: f.properties.NAME
             }));
-          globe.htmlElementsData(htmlLabels);
-          
-        // When zoomed out: disable raycasting, show low-poly, hide labels  
-        } else if (dist >= 220 && currentLod === 'high' && geo110m) {
-          currentLod = 'low';
-          currentGeoJson = geo110m;
-          globe.polygonsData(geo110m.features);
-          globe.enablePointerInteraction(false);
-          globe.htmlElementsData([]); 
+          globe.htmlElementsData(culledLabels);
         }
       });
     }
@@ -332,8 +352,21 @@ async function initGlobe(container) {
     globe.controls().minDistance = 120;
     globe.controls().maxDistance = 500;
     
-    // Set initial view
+    // Set initial view and fetch geolocation
     globe.pointOfView({ lat: 20, lng: 10, altitude: 2.2 });
+    
+    fetch('https://ipapi.co/json/')
+      .then(r => r.json())
+      .then(data => {
+        if (data && data.country_code && countriesData) {
+          const country = countriesData.COUNTRIES.find(c => c.id === data.country_code);
+          if (country && globeInstance) {
+            // Zoom right into the user's home country
+            globeInstance.pointOfView({ lat: country.lat, lng: country.lng, altitude: 0.8 }, 1500);
+          }
+        }
+      })
+      .catch(() => console.log('[Roamero] IP Geolocation bypassed'));
     
     // Stop auto-rotate on user interaction
     mountEl.addEventListener('mousedown', () => {
@@ -428,19 +461,21 @@ function refreshGlobe(container) {
   const isDark = document.documentElement.dataset.theme === 'dark';
   
   // Re-trigger polygon rendering
-  globeInstance.polygonsData(currentGeoJson.features);
+  globeInstance.hexPolygonsData(currentGeoJson.features);
   
   globeInstance
-    .polygonAltitude(d => {
+    .hexPolygonAltitude(d => {
       const iso = d.properties.ISO_A2;
-      return visits.countries[iso] ? 0.02 : 0.005;
+      return visits.countries[iso] ? 0.015 : 0.005;
     })
-    .polygonCapMaterial(d => {
+    .hexPolygonColor(d => {
       const iso = d.properties.ISO_A2;
       if (visits.countries[iso]) {
-        return getGradientMaterial();
+        const country = countriesData.COUNTRIES.find(c => c.id === iso);
+        const continent = country ? country.continent : 'Europe';
+        return getContinentColor(continent);
       }
-      return getUnvisitedMaterial(isDark);
+      return isDark ? 'rgba(139, 92, 246, 0.4)' : 'rgba(124, 58, 237, 0.4)';
     });
   
   // Refresh city points
