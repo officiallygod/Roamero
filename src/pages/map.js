@@ -9,158 +9,83 @@ import { initCookieConsent } from '../components/cookie-consent.js';
 import {
   getVisits, markCountryVisited, unmarkCountryVisited,
   markCityVisited, unmarkCityVisited, isCountryVisited, isCityVisited,
-  getSearchHistory, addSearchHistory, getPreferences, getVisitedCitiesForCountry
+  getSearchHistory, addSearchHistory, getPreferences, getVisitedCitiesForCountry,
+  generateShareableUrl
 } from '../services/storage.js';
-import { debounce, formatDate } from '../utils/helpers.js';
+import { debounce, formatDate, getContinentColor } from '../utils/helpers.js';
 import maplibregl from 'maplibre-gl';
-import Chart from 'chart.js/auto';
 
 let mapInstance = null;
-let searchWorker = null;
+let fuseInstance = null;
 let countriesData = null;
 let themeObserver = null;
 let currentSidePanel = null;
 
-// Chart instances
-let dynamicsChart = null;
-let trendChart = null;
-let markers = [];
-
 export async function renderMap(container, router) {
   container.innerHTML = `
     <div class="dashboard-layout">
-      
-      <!-- Center Map -->
-      <div class="globe-loading" id="globe-loading">
-        <div class="globe-loading-spinner"></div>
-      </div>
-      <div class="globe-container" id="globe-mount"></div>
-
-      <!-- Floating Search Bar -->
-      <div class="search-floating" id="search-wrapper">
-        <div class="search-input-container">
-          <span class="search-icon">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-            </svg>
-          </span>
-          <input type="text" id="search-input" placeholder="Search countries & cities..." autocomplete="off" />
+      <!-- Left Sidebar: Basics -->
+      <aside class="dash-sidebar left-sidebar" style="pointer-events: auto;">
+        <div class="dash-header">
+          <h1 class="dash-title">Roamero</h1>
+          <p class="dash-subtitle" style="font-size: 12px; opacity: 0.7; margin-top: 4px;">Every Place. Every Journey.</p>
         </div>
-        <div class="search-results" id="search-results"></div>
-      </div>
-      
-      <!-- Floating Dashboard UI Layer -->
-      <div class="dashboard-ui-layer">
-        
-        <!-- Left Panel -->
-        <div class="dash-panel left">
-          <!-- General Stats -->
-          <div class="dash-card">
-            <div class="card-header">
-              <div class="card-title">General statistics</div>
-              <div class="card-subtitle">All Places</div>
+        <div class="dash-section">
+          <h2 class="dash-section-title">Your Progress</h2>
+          <div class="dash-stats" id="dash-stats-container">
+            <div class="dash-stat-card">
+              <div class="dash-stat-value" id="stat-countries">0</div>
+              <div class="dash-stat-label">Countries Visited</div>
             </div>
-            <div class="stat-huge" id="stat-total-visits">0</div>
-            
-            <div class="ring-charts-row">
-              <div class="ring-chart">
-                <div class="ring-circle">
-                  <svg viewBox="0 0 50 50">
-                    <circle class="ring-bg" cx="25" cy="25" r="22.5" />
-                    <circle class="ring-fg" id="ring-world" cx="25" cy="25" r="22.5" />
-                  </svg>
-                  <div class="ring-value" id="ring-world-val">0%</div>
-                </div>
-                <div class="ring-label">
-                  <div class="ring-label-num" id="stat-world-count">0</div>
-                  <div class="ring-label-text">World Explored</div>
-                </div>
-              </div>
-              
-              <div class="ring-chart">
-                <div class="ring-circle">
-                  <svg viewBox="0 0 50 50">
-                    <circle class="ring-bg" cx="25" cy="25" r="22.5" />
-                    <circle class="ring-fg alt" id="ring-partner" cx="25" cy="25" r="22.5" />
-                  </svg>
-                  <div class="ring-value" id="ring-partner-val">0%</div>
-                </div>
-                <div class="ring-label">
-                  <div class="ring-label-num" id="stat-partner-count">0</div>
-                  <div class="ring-label-text">Shared Trips</div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Dynamics Chart -->
-          <div class="dash-card">
-            <div class="card-header">
-              <div class="card-title">Dynamics</div>
-              <div class="stat-trend positive">↑ 34%</div>
-            </div>
-            <div class="chart-container">
-              <canvas id="chart-dynamics"></canvas>
-            </div>
-          </div>
-
-          <!-- Most Engaged (Top Continents) -->
-          <div class="dash-card">
-            <div class="card-header">
-              <div class="card-title">Most engaged</div>
-              <div class="card-subtitle">Continents</div>
-            </div>
-            <div class="bar-list" id="top-continents-list">
-              <!-- Rendered via JS -->
-            </div>
-          </div>
-        </div>
-
-        <!-- Right Panel -->
-        <div class="dash-panel right" style="align-items: flex-end;">
-          <!-- Forecast -->
-          <div class="dash-card" style="width: 260px;">
-            <div class="card-header">
-              <div class="card-title">Forecast</div>
-            </div>
-            <div style="margin-bottom: var(--space-md);">
-              <div class="card-subtitle">Yearly</div>
-              <div class="stat-huge" style="font-size: var(--text-3xl);">12</div>
-              <div class="stat-trend positive">↑ 12% Next Year</div>
-            </div>
-          </div>
-
-          <!-- Trend Chart -->
-          <div class="dash-card" style="width: 300px;">
-            <div class="card-header">
-              <div class="card-title">Trend</div>
-              <div class="card-subtitle">Cities Visited</div>
-            </div>
-            <div class="chart-container">
-              <canvas id="chart-trend"></canvas>
-            </div>
-          </div>
-
-          <!-- Total Coverage -->
-          <div class="dash-card" style="width: 300px; display: flex; align-items: center; gap: var(--space-lg);">
-            <div class="ring-circle">
-              <svg viewBox="0 0 50 50">
-                <circle class="ring-bg" cx="25" cy="25" r="22.5" />
-                <circle class="ring-fg" id="ring-coverage" cx="25" cy="25" r="22.5" style="stroke: var(--color-warning);" />
-              </svg>
-              <div class="ring-value" id="ring-coverage-val">0%</div>
-            </div>
-            <div>
-              <div class="card-subtitle">Total coverage</div>
-              <div class="stat-huge" style="font-size: var(--text-2xl);" id="stat-coverage">0</div>
+            <div class="dash-stat-card">
+              <div class="dash-stat-value" id="stat-cities">0</div>
+              <div class="dash-stat-label">Cities Visited</div>
             </div>
           </div>
           
-          <!-- Theme Toggle -->
-          <div class="dash-card" id="map-actions" style="padding: var(--space-sm); border-radius: var(--radius-full);"></div>
+          <button class="btn btn-primary" id="btn-share-progress" style="margin-top: 1.5rem; width: 100%; display: flex; justify-content: center; align-items: center; gap: 8px;">
+            <span>Share Map</span>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="18" cy="5" r="3"></circle>
+              <circle cx="6" cy="12" r="3"></circle>
+              <circle cx="18" cy="19" r="3"></circle>
+              <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line>
+              <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>
+            </svg>
+          </button>
         </div>
+      </aside>
 
-      </div>
+      <!-- Center Map -->
+      <main class="dash-main" style="position: relative; width: 100%; height: 100%;">
+        <div class="globe-loading" id="globe-loading">
+          <div class="globe-loading-spinner"></div>
+          <div class="globe-loading-text">Initializing Engine...</div>
+        </div>
+        
+        <div class="globe-container" id="globe-mount"></div>
+        
+        <div class="map-topbar">
+          <div class="search-wrapper" id="search-wrapper">
+            <div class="search-input-container">
+              <span class="search-icon">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                </svg>
+              </span>
+              <input type="text" class="search-input" id="search-input" placeholder="Search countries & cities..." autocomplete="off" />
+              <button class="search-clear" id="search-clear">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+              </button>
+              <span class="search-kbd">/</span>
+            </div>
+            <div class="search-results" id="search-results"></div>
+          </div>
+          <div class="map-actions" id="map-actions"></div>
+        </div>
+      </main>
 
       <!-- Side Panel Overlay -->
       <div class="side-panel-overlay" id="side-panel-overlay"></div>
@@ -178,14 +103,25 @@ export async function renderMap(container, router) {
   // Init cookie consent
   initCookieConsent();
   
-  // Load data and init
-  await loadCountriesData();
-  initWebWorker(container);
+  // Load data and init map
   await initMap(container);
-  initCharts();
-  renderDashboardStats();
+  initSearch(container);
   initSidePanelEvents(container);
   
+  // Share Button Logic
+  const shareBtn = container.querySelector('#btn-share-progress');
+  if (shareBtn) {
+    shareBtn.addEventListener('click', async () => {
+      const url = generateShareableUrl();
+      try {
+        await navigator.clipboard.writeText(url);
+        showToast(container, '🔗 Share Link Copied to Clipboard!');
+      } catch (err) {
+        showToast(container, '❌ Failed to copy link');
+      }
+    });
+  }
+
   // Keyboard shortcut: "/" to focus search
   const handleKeydown = (e) => {
     if (e.key === '/' && document.activeElement !== container.querySelector('#search-input')) {
@@ -210,11 +146,13 @@ export async function renderMap(container, router) {
   });
   themeObserver.observe(document.documentElement, { attributes: true });
 
+  // Update initial stats
+  updateStats();
+
   return {
     destroy() {
       if (themeObserver) themeObserver.disconnect();
       document.removeEventListener('keydown', handleKeydown);
-      if (searchWorker) searchWorker.terminate();
       if (mapInstance) {
         mapInstance.remove();
         mapInstance = null;
@@ -223,148 +161,46 @@ export async function renderMap(container, router) {
   };
 }
 
-async function loadCountriesData() {
-  const m = await import('../data/countries.js');
-  countriesData = m;
-}
-
-// ============================================
-// Web Worker for Search
-// ============================================
-function initWebWorker(container) {
-  const input = container.querySelector('#search-input');
-  const results = container.querySelector('#search-results');
-  let activeIndex = -1;
-
-  searchWorker = new Worker(new URL('../workers/search.worker.js', import.meta.url), { type: 'module' });
-
-  // Initialize Worker
-  if (countriesData && countriesData.ALL_PLACES) {
-    searchWorker.postMessage({
-      type: 'INIT',
-      payload: {
-        items: countriesData.ALL_PLACES,
-        options: {
-          keys: [{ name: 'name', weight: 0.7 }, { name: 'countryName', weight: 0.3 }],
-          threshold: 0.35, distance: 100, includeScore: true, includeMatches: true, minMatchCharLength: 1
-        }
-      }
-    });
-  }
-
-  // Handle messages from Worker
-  searchWorker.onmessage = (e) => {
-    const { type, payload } = e.data;
-    if (type === 'SEARCH_RESULTS') {
-      renderSearchResults(container, payload.results, payload.query);
-    }
-  };
-
-  const doSearch = debounce((query) => {
-    if (!query || query.length < 1) {
-      results.classList.remove('visible');
-      return;
-    }
-    searchWorker.postMessage({ type: 'SEARCH', payload: { query } });
-  }, 150);
-
-  input.addEventListener('input', () => {
-    const val = input.value.trim();
-    doSearch(val);
-  });
-}
-
-function renderSearchResults(container, searchResults, query) {
-  const results = container.querySelector('#search-results');
-  if (searchResults.length === 0) {
-    results.innerHTML = `<div style="padding: 1rem; text-align: center; color: var(--color-text-tertiary);">No places found for "${query}"</div>`;
-    results.classList.add('visible');
-    return;
-  }
-  
+function updateStats() {
   const visits = getVisits();
-  results.innerHTML = searchResults.slice(0, 10).map((r, i) => {
-    const item = r.item;
-    const isVisited = item.type === 'country' ? !!visits.countries[item.id] : !!visits.cities[item.id];
-    return `
-      <div class="search-result-item ${i === 0 ? 'active' : ''}" 
-           data-type="${item.type}" data-id="${item.id}" data-country-id="${item.type === 'city' ? item.countryId : item.id}"
-           data-lat="${item.lat}" data-lng="${item.lng}" data-name="${item.name}">
-        <div>${item.type === 'country' ? (item.emoji || '🌍') : '📍'}</div>
-        <div style="flex: 1;">
-          <div style="font-weight: 500; font-size: 14px;">${item.name}</div>
-          <div style="font-size: 11px; color: var(--color-text-tertiary);">${item.type === 'city' ? item.countryName : item.continent || ''}</div>
-        </div>
-      </div>
-    `;
-  }).join('');
-  
-  results.classList.add('visible');
-  results.querySelectorAll('.search-result-item').forEach(el => {
-    el.addEventListener('click', () => selectSearchResult(container, el));
-  });
+  document.getElementById('stat-countries').textContent = Object.keys(visits.countries).length;
+  document.getElementById('stat-cities').textContent = Object.keys(visits.cities).length;
 }
 
-function selectSearchResult(container, el) {
-  const type = el.dataset.type;
-  const id = el.dataset.id;
-  const lat = parseFloat(el.dataset.lat);
-  const lng = parseFloat(el.dataset.lng);
-  const countryId = el.dataset.countryId;
-  const name = el.dataset.name;
-  
-  addSearchHistory(name);
-  container.querySelector('#search-results').classList.remove('visible');
-  container.querySelector('#search-input').value = name;
-  container.querySelector('#search-input').blur();
-  
-  if (mapInstance) {
-    mapInstance.flyTo({ center: [lng, lat], zoom: type === 'city' ? 6 : 3, duration: 1500 });
-  }
-  
-  if (countriesData) {
-    const cId = type === 'country' ? id : countryId;
-    const country = countriesData.COUNTRIES.find(c => c.id === cId);
-    if (country) {
-      setTimeout(() => openSidePanel(container, country), 800);
-    }
-  }
-}
-
-// ============================================
-// Map Initialization
-// ============================================
+/**
+ * Generate MapLibre Style Object dynamically based on visits and theme
+ */
 function getMapStyle(isDark, visits) {
   const visitedIsos = Object.keys(visits.countries);
-  const matchExpr = ['match', ['case', ['==', ['get', 'ISO_A2'], '-99'], ['get', 'ISO_A2_EH'], ['get', 'ISO_A2']]];
   
-  // Dashboard aesthetic glowing colors
-  const unvisitedColor = isDark ? '#1e1b4b' : '#ffffff';
-  const colorMe = '#8b5cf6';
-  const colorPartner = '#3b82f6';
-  const colorBoth = '#f97316';
+  const getIso = ['case', 
+    ['==', ['get', 'ISO_A2'], '-99'], ['get', 'ISO_A2_EH'], 
+    ['get', 'ISO_A2']
+  ];
+  
+  const matchExpr = ['match', getIso];
+  
+  const unvisitedDark = '#121212';
+  const unvisitedLight = '#ffffff';
   
   if (visitedIsos.length === 0) {
-    matchExpr.push('NONE', colorMe, unvisitedColor);
+    matchExpr.push('NONE', '#8b5cf6', isDark ? unvisitedDark : unvisitedLight);
   } else {
     visitedIsos.forEach(iso => {
-       const info = visits.countries[iso];
-       const visitor = info?.visitor || 'me';
-       let color = colorMe;
-       if (visitor === 'partner') color = colorPartner;
-       if (visitor === 'both') color = colorBoth;
+       const country = countriesData.COUNTRIES.find(c => c.id === iso);
+       const color = getContinentColor(country ? country.continent : 'Europe');
        matchExpr.push(iso, color);
     });
-    matchExpr.push(unvisitedColor);
+    matchExpr.push(isDark ? unvisitedDark : unvisitedLight);
   }
 
   return {
     version: 8,
+    glyphs: "https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf",
     sources: {
       countries: {
         type: 'geojson',
-        data: import.meta.env.BASE_URL + 'data/110m.geojson',
-        generateId: true, tolerance: 0.5
+        data: import.meta.env.BASE_URL + 'data/50m.geojson'
       }
     },
     layers: [
@@ -372,7 +208,7 @@ function getMapStyle(isDark, visits) {
         id: 'background',
         type: 'background',
         paint: {
-          'background-color': 'rgba(0,0,0,0)' // Transparent to show CSS radial gradient
+          'background-color': isDark ? '#000000' : '#f0f2f5'
         }
       },
       {
@@ -389,54 +225,108 @@ function getMapStyle(isDark, visits) {
         type: 'line',
         source: 'countries',
         paint: {
-          'line-color': isDark ? 'rgba(255,255,255,0.1)' : 'rgba(96, 165, 250, 0.3)',
-          'line-width': 1.0
+          'line-color': isDark ? '#2a2a2a' : '#e0e2e6',
+          'line-width': 0.8
+        }
+      },
+      {
+        id: 'country-labels',
+        type: 'symbol',
+        source: 'countries',
+        minzoom: 4.0,
+        filter: ['>', ['get', 'POP_EST'], 5000000],
+        layout: {
+          'text-field': ['get', 'NAME'],
+          'text-font': ['Open Sans Regular'],
+          'text-size': 14,
+          'text-transform': 'uppercase',
+          'text-letter-spacing': 0.1,
+          'symbol-spacing': 1000,
+          'text-padding': 20,
+          'text-allow-overlap': false,
+          'text-ignore-placement': false,
+          'text-variable-anchor': ['center'],
+          'text-justify': 'center'
+        },
+        paint: {
+          'text-color': isDark ? '#8b7faf' : '#6b7280',
+          'text-halo-color': isDark ? '#121212' : '#ffffff',
+          'text-halo-width': 2,
+          'text-opacity': [
+            'interpolate', ['linear'], ['zoom'],
+            4.0, 0,
+            5.0, 1
+          ]
         }
       }
     ]
   };
 }
 
+// ============================================
+// Map Initialization
+// ============================================
 async function initMap(container) {
   const mountEl = container.querySelector('#globe-mount');
   const loadingEl = container.querySelector('#globe-loading');
-  const visits = getVisits();
-  const prefs = getPreferences();
-  const isDark = prefs.theme === 'dark';
   
-  mapInstance = new maplibregl.Map({
-    container: mountEl,
-    style: getMapStyle(isDark, visits),
-    center: [10, 20],
-    zoom: 2.5,
-    minZoom: 1.5,
-    maxZoom: 10,
-    interactive: true,
-    pitchWithRotate: false,
-    dragRotate: false
-  });
-  
-  mapInstance.on('style.load', () => {
-    mapInstance.setProjection({ type: 'globe' });
-    if (loadingEl) {
-      loadingEl.style.opacity = '0';
-      setTimeout(() => loadingEl.remove(), 300);
-    }
-    renderMapMarkers();
-  });
-  
-  mapInstance.on('click', 'country-fills', (e) => {
-    const feature = e.features[0];
-    if (!feature) return;
-    const iso = feature.properties.ISO_A2;
-    const country = countriesData.COUNTRIES.find(c => c.id === iso);
-    if (country) {
-      setTimeout(() => openSidePanel(container, country), 200);
-    }
-  });
+  try {
+    const m = await import('../data/countries.js');
+    countriesData = m;
+    
+    const visits = getVisits();
+    const prefs = getPreferences();
+    const isDark = prefs.theme === 'dark';
+    
+    mapInstance = new maplibregl.Map({
+      container: mountEl,
+      style: getMapStyle(isDark, visits),
+      center: [10, 20],
+      zoom: 1.5,
+      minZoom: 1.5,
+      maxZoom: 10,
+      interactive: true,
+      pitchWithRotate: false,
+      dragRotate: false
+    });
+    
+    mapInstance.on('style.load', () => {
+      mapInstance.setProjection({ type: 'globe' });
+      if (loadingEl) {
+        loadingEl.style.opacity = '0';
+        setTimeout(() => loadingEl.remove(), 300);
+      }
+    });
+    
+    mapInstance.on('click', 'country-fills', (e) => {
+      const feature = e.features[0];
+      if (!feature) return;
+      const iso = feature.properties.ISO_A2;
+      const country = countriesData.COUNTRIES.find(c => c.id === iso);
+      
+      if (country) {
+        if (isCountryVisited(country.id)) {
+          unmarkCountryVisited(country.id);
+          showToast(container, `❌ ${country.name} unmarked`);
+        } else {
+          markCountryVisited(country.id);
+          showToast(container, `✅ ${country.name} marked as visited!`);
+        }
+        refreshMap();
+        setTimeout(() => openSidePanel(container, country), 200);
+      }
+    });
 
-  mapInstance.on('mouseenter', 'country-fills', () => mapInstance.getCanvas().style.cursor = 'pointer');
-  mapInstance.on('mouseleave', 'country-fills', () => mapInstance.getCanvas().style.cursor = '');
+    mapInstance.on('mouseenter', 'country-fills', () => {
+      mapInstance.getCanvas().style.cursor = 'pointer';
+    });
+    mapInstance.on('mouseleave', 'country-fills', () => {
+      mapInstance.getCanvas().style.cursor = '';
+    });
+    
+  } catch (err) {
+    console.error('[Roamero] Failed to initialize map:', err);
+  }
 }
 
 function refreshMap() {
@@ -444,185 +334,106 @@ function refreshMap() {
   const isDark = document.documentElement.dataset.theme === 'dark';
   const visits = getVisits();
   mapInstance.setStyle(getMapStyle(isDark, visits));
-  renderDashboardStats();
-  renderMapMarkers();
+  updateStats();
 }
 
 // ============================================
-// Map Markers
+// Search
 // ============================================
-function renderMapMarkers() {
-  if (!mapInstance || !countriesData) return;
+function initSearch(container) {
+  const input = container.querySelector('#search-input');
+  const results = container.querySelector('#search-results');
+  const clearBtn = container.querySelector('#search-clear');
+  let activeIndex = -1;
   
-  // Clear old
-  markers.forEach(m => m.remove());
-  markers = [];
-  
-  const visits = getVisits();
-  const visitedCityIds = Object.keys(visits.cities);
-  
-  visitedCityIds.forEach(cityId => {
-    // Find city coords
-    const cityData = countriesData.ALL_PLACES.find(p => p.type === 'city' && p.id === cityId);
-    if (!cityData) return;
-    
-    // Parent country
-    const cInfo = visits.countries[cityData.countryId];
-    const visitor = cInfo?.visitor || 'me';
-    let iconClass = 'purple';
-    if (visitor === 'partner') iconClass = 'blue';
-    if (visitor === 'both') iconClass = 'orange';
-
-    const el = document.createElement('div');
-    el.className = 'map-marker';
-    // Fake numbers to match dashboard mockup style (e.g. "Chicago 98,320,300")
-    const popScore = Math.floor(Math.random() * 90000000) + 10000000;
-    el.innerHTML = `
-      <div class="marker-icon ${iconClass}"></div>
-      <div>
-        <div style="font-size: 9px; color: var(--color-text-tertiary);">${cityData.name}</div>
-        <div class="marker-value">${popScore.toLocaleString()}</div>
-      </div>
-    `;
-    
-    el.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const country = countriesData.COUNTRIES.find(c => c.id === cityData.countryId);
-      if (country) openSidePanel(document.body, country);
-    });
-
-    const marker = new maplibregl.Marker({ element: el })
-      .setLngLat([cityData.lng, cityData.lat])
-      .addTo(mapInstance);
-      
-    markers.push(marker);
-  });
-}
-
-// ============================================
-// Chart.js & Dashboard Stats
-// ============================================
-function initCharts() {
-  // Common chart options
-  Chart.defaults.font.family = "'Inter', sans-serif";
-  Chart.defaults.color = "#94a3b8";
-
-  // Dynamics Line Chart
-  const ctxDyn = document.getElementById('chart-dynamics');
-  if (ctxDyn) {
-    const gradient = ctxDyn.getContext('2d').createLinearGradient(0, 0, 400, 0);
-    gradient.addColorStop(0, '#6366f1'); // Indigo
-    gradient.addColorStop(1, '#ec4899'); // Pink
-    
-    dynamicsChart = new Chart(ctxDyn, {
-      type: 'line',
-      data: {
-        labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
-        datasets: [{
-          label: 'Dynamics',
-          data: [10, 25, 20, 40, 35, 55],
-          borderColor: gradient,
-          borderWidth: 3,
-          tension: 0.4,
-          pointRadius: 0
-        }]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: { legend: { display: false } },
-        scales: { x: { display: false }, y: { display: false } }
-      }
-    });
-  }
-
-  // Trend Line Chart
-  const ctxTrend = document.getElementById('chart-trend');
-  if (ctxTrend) {
-    trendChart = new Chart(ctxTrend, {
-      type: 'line',
-      data: {
-        labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May'],
-        datasets: [{
-          data: [12, 19, 15, 25, 22],
-          borderColor: '#3b82f6',
-          borderWidth: 2,
-          tension: 0.4,
-          pointRadius: 0
-        }, {
-          data: [5, 10, 8, 15, 12],
-          borderColor: '#f59e0b',
-          borderWidth: 2,
-          tension: 0.4,
-          pointRadius: 0
-        }]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: { legend: { display: false } },
-        scales: { x: { display: false }, y: { display: false } }
-      }
-    });
-  }
-}
-
-function renderDashboardStats() {
-  const visits = getVisits();
-  const visitedCountries = Object.values(visits.countries);
-  const total = visitedCountries.length;
-  
-  // Total Visits
-  document.getElementById('stat-total-visits').textContent = total.toLocaleString();
-  
-  // Calculate Rings
-  const totalWorld = 250; // Approx countries
-  const pctWorld = totalWorld > 0 ? Math.round((total / totalWorld) * 100) : 0;
-  
-  const partnerCount = visitedCountries.filter(c => c.visitor === 'partner' || c.visitor === 'both').length;
-  const pctPartner = total > 0 ? Math.round((partnerCount / total) * 100) : 0;
-
-  // Update Rings (141 is the stroke-dasharray)
-  document.getElementById('ring-world').style.strokeDashoffset = 141 - (141 * pctWorld / 100);
-  document.getElementById('ring-world-val').textContent = pctWorld + '%';
-  document.getElementById('stat-world-count').textContent = total.toLocaleString();
-  
-  document.getElementById('ring-partner').style.strokeDashoffset = 141 - (141 * pctPartner / 100);
-  document.getElementById('ring-partner-val').textContent = pctPartner + '%';
-  document.getElementById('stat-partner-count').textContent = partnerCount.toLocaleString();
-  
-  document.getElementById('ring-coverage').style.strokeDashoffset = 141 - (141 * pctWorld / 100);
-  document.getElementById('ring-coverage-val').textContent = pctWorld + '%';
-  document.getElementById('stat-coverage').textContent = (total * 21543).toLocaleString(); // Fake large number for mockup
-
-  // Most Engaged (Top Continents)
-  const contCounts = {};
-  visitedCountries.forEach(v => {
-    const c = countriesData.COUNTRIES.find(country => country.id === v.id);
-    if (c) {
-      contCounts[c.continent] = (contCounts[c.continent] || 0) + 1;
+  import('fuse.js').then(Fuse => {
+    const FuseClass = Fuse.default || Fuse;
+    if (countriesData && countriesData.ALL_PLACES) {
+      fuseInstance = new FuseClass(countriesData.ALL_PLACES, {
+        keys: [{ name: 'name', weight: 0.7 }, { name: 'countryName', weight: 0.3 }],
+        threshold: 0.35, distance: 100, includeScore: true, includeMatches: true, minMatchCharLength: 1
+      });
     }
   });
   
-  const sortedCont = Object.entries(contCounts).sort((a,b) => b[1] - a[1]).slice(0, 5);
-  const colors = ['#8b5cf6', '#3b82f6', '#f97316', '#f43f5e', '#eab308'];
-  const max = sortedCont[0] ? sortedCont[0][1] : 1;
-  
-  document.getElementById('top-continents-list').innerHTML = sortedCont.map((sc, i) => {
-    const pct = Math.max((sc[1] / max) * 100, 15);
-    const score = (sc[1] * 12431).toLocaleString();
-    return `
-      <div class="bar-item">
-        <div class="bar-wrapper">
-          <div class="bar-fill" style="width: ${pct}%; background: ${colors[i % colors.length]};">${sc[0]}</div>
-        </div>
-        <div class="bar-stats">
-          <div class="bar-stats-main">${score}</div>
-          <div class="bar-stats-sub">+${Math.floor(Math.random() * 500)}</div>
-        </div>
-      </div>
+  const doSearch = debounce((query) => {
+    if (!query || query.length < 1 || !fuseInstance) {
+      results.classList.remove('visible');
+      return;
+    }
+    
+    const searchResults = fuseInstance.search(query).slice(0, 12);
+    if (searchResults.length === 0) {
+      results.innerHTML = `<div class="search-no-results">No places found for "${query}"</div>`;
+      results.classList.add('visible');
+      return;
+    }
+    
+    const visits = getVisits();
+    results.innerHTML = `
+      <div class="search-results-header">Results</div>
+      ${searchResults.map((r, i) => {
+        const item = r.item;
+        const isVisited = item.type === 'country' ? !!visits.countries[item.id] : !!visits.cities[item.id];
+        return `
+          <div class="search-result-item ${i === 0 ? 'active' : ''}" data-type="${item.type}" data-id="${item.id}" data-country-id="${item.type === 'city' ? item.countryId : item.id}" data-lat="${item.lat}" data-lng="${item.lng}">
+            <div class="search-result-icon">${item.type === 'country' ? (item.emoji || '🌍') : '📍'}</div>
+            <div class="search-result-info">
+              <div class="search-result-name">${item.name}</div>
+              <div class="search-result-meta">${item.type === 'city' ? item.countryName : item.continent || ''}</div>
+            </div>
+            <span class="search-result-badge ${item.type} ${isVisited ? 'visited' : ''}">${isVisited ? '✓ Visited' : item.type}</span>
+          </div>
+        `;
+      }).join('')}
     `;
-  }).join('');
+    
+    results.classList.add('visible');
+    activeIndex = 0;
+    
+    results.querySelectorAll('.search-result-item').forEach(el => {
+      el.addEventListener('click', () => selectSearchResult(container, el));
+    });
+  }, 150);
+  
+  input.addEventListener('input', () => {
+    const val = input.value.trim();
+    clearBtn.classList.toggle('visible', val.length > 0);
+    container.querySelector('.search-kbd')?.classList.toggle('visible', val.length === 0);
+    doSearch(val);
+  });
+  
+  clearBtn.addEventListener('click', () => {
+    input.value = '';
+    clearBtn.classList.remove('visible');
+    results.classList.remove('visible');
+    input.focus();
+  });
+}
+
+function selectSearchResult(container, el) {
+  const type = el.dataset.type;
+  const lat = parseFloat(el.dataset.lat);
+  const lng = parseFloat(el.dataset.lng);
+  const countryId = el.dataset.countryId;
+  const name = el.querySelector('.search-result-name').textContent;
+  
+  addSearchHistory(name);
+  container.querySelector('#search-results').classList.remove('visible');
+  container.querySelector('#search-input').value = name;
+  container.querySelector('#search-input').blur();
+  
+  if (mapInstance) {
+    mapInstance.flyTo({ center: [lng, lat], zoom: type === 'city' ? 6 : 3, duration: 1500 });
+  }
+  
+  if (countriesData) {
+    const cId = type === 'country' ? el.dataset.id : countryId;
+    const country = countriesData.COUNTRIES.find(c => c.id === cId);
+    if (country) {
+      setTimeout(() => openSidePanel(container, country), 800);
+    }
+  }
 }
 
 // ============================================
@@ -644,29 +455,59 @@ function openSidePanel(container, country) {
   panel.innerHTML = `
     <div class="side-panel-header">
       <div class="side-panel-title">
-        <span>${country.emoji || '🏳️'}</span>
-        <span>${country.name}</span>
+        <span class="side-panel-flag">${country.emoji || '🏳️'}</span>
+        <span class="side-panel-name">${country.name}</span>
       </div>
-      <button class="side-panel-close" id="side-panel-close">×</button>
+      <button class="side-panel-close" id="side-panel-close">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </button>
     </div>
     
     <div class="side-panel-body">
-      <!-- Country Visit Toggle -->
-      <div class="country-visit-toggles" style="display: flex; gap: 8px; margin-bottom: var(--space-xl);">
-        <button class="btn-visitor ${visits.countries[country.id]?.visitor === 'me' ? 'active' : ''}" data-visitor="me" style="flex:1; padding: 8px; border-radius: 8px; border: 1px solid var(--color-border); background: var(--color-surface); cursor: pointer;">Me</button>
-        <button class="btn-visitor ${visits.countries[country.id]?.visitor === 'partner' ? 'active' : ''}" data-visitor="partner" style="flex:1; padding: 8px; border-radius: 8px; border: 1px solid var(--color-border); background: var(--color-surface); cursor: pointer;">Partner</button>
-        <button class="btn-visitor ${visits.countries[country.id]?.visitor === 'both' ? 'active' : ''}" data-visitor="both" style="flex:1; padding: 8px; border-radius: 8px; border: 1px solid var(--color-border); background: var(--color-surface); cursor: pointer;">Both</button>
-        <button class="btn-visitor remove-visit ${!countryVisited ? 'hidden' : ''}" id="btn-remove-visit" style="padding: 8px; border-radius: 8px; border: 1px solid var(--color-danger); background: var(--color-danger-bg); cursor: pointer; color: var(--color-danger);">X</button>
+      <p class="side-panel-desc">${country.description || ''}</p>
+      
+      <div class="side-panel-meta">
+        <div class="side-panel-meta-item">🌍 ${country.continent}</div>
+        <div class="side-panel-meta-item">📍 ${country.cities.length} places</div>
       </div>
       
-      <h3 style="font-size: 16px; margin-bottom: 16px;">Top Places</h3>
-      <div style="display: flex; flex-direction: column; gap: 8px;">
+      <!-- Country Visit Toggle -->
+      <div class="country-visit-toggle ${countryVisited ? 'visited' : ''}" id="country-visit-toggle">
+        <div class="visit-toggle-label">
+          <div class="visit-toggle-check">
+            ${countryVisited ? `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>` : ''}
+          </div>
+          <span>${countryVisited ? 'Visited!' : 'Mark as visited'}</span>
+        </div>
+      </div>
+      
+      ${countryVisited ? `
+        <div class="visit-date-row">
+          <span style="font-size: var(--text-sm); color: var(--color-text-tertiary);">📅 When?</span>
+          <input type="date" class="visit-date-input" id="country-visit-date" 
+                 value="${visits.countries[country.id]?.visitedAt || ''}" />
+        </div>
+      ` : ''}
+      
+      <!-- Cities -->
+      <h3 class="side-panel-section-title" style="margin-top: var(--space-xl);">Top Places</h3>
+      <div class="city-list" id="city-list">
         ${country.cities.map(city => {
           const cityVisited = !!visitedCities[city.id] || isCityVisited(city.id);
+          const visitDate = visits.cities[city.id]?.visitedAt;
           return `
-            <div class="country-visit-toggle ${cityVisited ? 'visited' : ''}" data-city-id="${city.id}">
-              <div class="visit-toggle-label">${city.name}</div>
-              <div class="visit-toggle-check">${cityVisited ? '✓' : ''}</div>
+            <div class="city-item ${cityVisited ? 'visited' : ''}" data-city-id="${city.id}">
+              <div class="city-marker"></div>
+              <div class="city-info">
+                <div class="city-name">${city.name}</div>
+                <div class="city-desc">${city.description || ''}</div>
+                ${cityVisited && visitDate ? `<div class="city-visit-date">Visited ${formatDate(visitDate)}</div>` : ''}
+              </div>
+              <div class="city-check">
+                ${cityVisited ? `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>` : ''}
+              </div>
             </div>
           `;
         }).join('')}
@@ -679,28 +520,36 @@ function openSidePanel(container, country) {
   
   panel.querySelector('#side-panel-close').addEventListener('click', () => closeSidePanel(container));
   
-  panel.querySelectorAll('.btn-visitor[data-visitor]').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      markCountryVisited(country.id, null, e.target.dataset.visitor);
-      refreshMap();
-      openSidePanel(container, country);
-    });
-  });
-
-  const removeBtn = panel.querySelector('#btn-remove-visit');
-  if (removeBtn) {
-    removeBtn.addEventListener('click', () => {
+  panel.querySelector('#country-visit-toggle').addEventListener('click', () => {
+    if (isCountryVisited(country.id)) {
       unmarkCountryVisited(country.id);
+      showToast(container, `❌ ${country.name} removed`);
+    } else {
+      markCountryVisited(country.id);
+      showToast(container, `✅ ${country.name} marked as visited!`);
+    }
+    refreshMap();
+    openSidePanel(container, country);
+  });
+  
+  const dateInput = panel.querySelector('#country-visit-date');
+  if (dateInput) {
+    dateInput.addEventListener('change', (e) => {
+      markCountryVisited(country.id, e.target.value);
       refreshMap();
-      openSidePanel(container, country);
     });
   }
   
-  panel.querySelectorAll('.country-visit-toggle').forEach(el => {
+  panel.querySelectorAll('.city-item').forEach(el => {
     el.addEventListener('click', () => {
       const cityId = el.dataset.cityId;
-      if (isCityVisited(cityId)) unmarkCityVisited(cityId);
-      else markCityVisited(cityId, country.id);
+      if (isCityVisited(cityId)) {
+        unmarkCityVisited(cityId);
+        showToast(container, `📍 City unmarked`);
+      } else {
+        markCityVisited(cityId, country.id);
+        showToast(container, `📍 City marked as visited!`);
+      }
       refreshMap();
       openSidePanel(container, country);
     });

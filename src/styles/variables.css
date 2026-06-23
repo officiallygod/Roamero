@@ -6,7 +6,7 @@
 :root {
   /* === Typography === */
   --font-primary: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  --font-display: 'Inter', -apple-system, sans-serif;
+  --font-display: 'Space Grotesk', 'Inter', sans-serif;
   
   /* === Font Sizes === */
   --text-xs: 0.75rem;
@@ -118,8 +118,6 @@
   
   /* === Visited Place Colors === */
   --color-visited: #c084fc;
-  --color-visited-partner: #38bdf8;
-  --color-visited-both: #f472b6;
   --color-visited-glow: rgba(192, 132, 252, 0.5);
   --color-unvisited: rgba(139, 92, 246, 0.08);
   --color-unvisited-border: rgba(139, 92, 246, 0.2);
@@ -154,72 +152,66 @@
    LIGHT THEME
    ============================================ */
 [data-theme="light"] {
-  --color-bg-primary: #eef2f9; /* Very light periwinkle/blue background */
-  --color-bg-secondary: #f4f7fb;
-  --color-bg-tertiary: #ffffff;
+  --color-bg-primary: #f5f0ff;
+  --color-bg-secondary: #ede5ff;
+  --color-bg-tertiary: #e2d8f5;
   --color-bg-elevated: #ffffff;
   
-  --color-surface: rgba(255, 255, 255, 0.95);
-  --color-surface-hover: rgba(255, 255, 255, 1);
-  --color-surface-active: rgba(248, 250, 252, 1);
-  --color-surface-glass: rgba(255, 255, 255, 0.85);
+  --color-surface: rgba(255, 255, 255, 0.85);
+  --color-surface-hover: rgba(237, 229, 255, 0.9);
+  --color-surface-active: rgba(226, 216, 245, 0.95);
+  --color-surface-glass: rgba(255, 255, 255, 0.7);
   
-  --color-text-primary: #1e1b4b; /* Deep navy */
-  --color-text-secondary: #64748b; /* Slate gray */
-  --color-text-tertiary: #94a3b8;
-  --color-text-muted: #cbd5e1;
-  --color-text-inverse: #ffffff;
+  --color-text-primary: #1a0e3a;
+  --color-text-secondary: #4a3d6e;
+  --color-text-tertiary: #7b6f9e;
+  --color-text-muted: #a89cc8;
+  --color-text-inverse: #f0ecf9;
   
-  --color-accent: #6366f1; /* Indigo */
-  --color-accent-light: #818cf8;
-  --color-accent-dark: #4f46e5;
-  --color-accent-glow: rgba(99, 102, 241, 0.2);
+  --color-accent: #7c3aed;
+  --color-accent-light: #8b5cf6;
+  --color-accent-dark: #6d28d9;
+  --color-accent-glow: rgba(124, 58, 237, 0.2);
   
-  --color-success: #10b981;
-  --color-success-bg: rgba(16, 185, 129, 0.1);
-  --color-warning: #f59e0b;
-  --color-warning-bg: rgba(245, 158, 11, 0.1);
-  --color-danger: #f43f5e;
-  --color-danger-bg: rgba(244, 63, 94, 0.1);
-  --color-info: #3b82f6;
-  --color-info-bg: rgba(59, 130, 246, 0.1);
+  --color-success: #059669;
+  --color-success-bg: rgba(5, 150, 105, 0.1);
+  --color-warning: #d97706;
+  --color-warning-bg: rgba(217, 119, 6, 0.1);
+  --color-danger: #dc2626;
+  --color-danger-bg: rgba(220, 38, 38, 0.1);
+  --color-info: #2563eb;
+  --color-info-bg: rgba(37, 99, 235, 0.1);
   
-  /* Visited Places - mimicking the dashboard chart colors */
-  --color-visited: #8b5cf6; /* Purple */
-  --color-visited-partner: #3b82f6; /* Blue */
-  --color-visited-both: #f97316; /* Orange */
+  --color-visited: #7c3aed;
+  --color-visited-glow: rgba(124, 58, 237, 0.3);
+  --color-unvisited: rgba(124, 58, 237, 0.05);
+  --color-unvisited-border: rgba(124, 58, 237, 0.15);
+  --color-hover-country: rgba(124, 58, 237, 0.15);
   
-  --color-visited-glow: rgba(139, 92, 246, 0.3);
-  --color-unvisited: rgba(255, 255, 255, 0.4);
-  --color-unvisited-border: rgba(255, 255, 255, 0.8);
-  --color-hover-country: rgba(255, 255, 255, 0.8);
+  --gradient-primary: linear-gradient(135deg, #7c3aed 0%, #db2777 100%);
+  --gradient-surface: linear-gradient(135deg, rgba(255, 255, 255, 0.9) 0%, rgba(237, 229, 255, 0.9) 100%);
+  --gradient-hero: linear-gradient(135deg, #f5f0ff 0%, #ede5ff 40%, #ddd0ff 100%);
+  --gradient-accent: linear-gradient(135deg, #6d28d9 0%, #7c3aed 50%, #8b5cf6 100%);
+  --gradient-warm: linear-gradient(135deg, #f59e0b 0%, #ec4899 50%, #7c3aed 100%);
+  --gradient-globe: radial-gradient(circle at center, #ffffff 0%, #f4f4f7 100%);
   
-  --gradient-primary: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);
-  --gradient-surface: linear-gradient(135deg, rgba(255, 255, 255, 1) 0%, rgba(248, 250, 252, 1) 100%);
-  --gradient-hero: linear-gradient(135deg, #ffffff 0%, #f1f5f9 100%);
-  --gradient-accent: linear-gradient(135deg, #8b5cf6 0%, #3b82f6 100%);
-  --gradient-warm: linear-gradient(135deg, #f59e0b 0%, #ec4899 100%);
+  --color-border: rgba(124, 58, 237, 0.12);
+  --color-border-hover: rgba(124, 58, 237, 0.25);
+  --color-border-active: rgba(124, 58, 237, 0.4);
   
-  /* Bright blue globe gradient */
-  --gradient-globe: radial-gradient(circle at center, #60a5fa 0%, #2563eb 60%, #1e40af 100%);
+  --scrollbar-track: #ede5ff;
+  --scrollbar-thumb: #c4b5fd;
+  --scrollbar-thumb-hover: #7c3aed;
   
-  --color-border: rgba(148, 163, 184, 0.15);
-  --color-border-hover: rgba(148, 163, 184, 0.3);
-  --color-border-active: rgba(148, 163, 184, 0.4);
+  --globe-atmosphere: rgba(124, 58, 237, 0.2);
+  --globe-country-default: #e2d8f5;
+  --globe-country-stroke: rgba(124, 58, 237, 0.25);
+  --globe-ocean: #f5f0ff;
   
-  --scrollbar-track: #f1f5f9;
-  --scrollbar-thumb: #cbd5e1;
-  --scrollbar-thumb-hover: #94a3b8;
-  
-  --globe-atmosphere: rgba(255, 255, 255, 0.8);
-  --globe-country-default: #ffffff;
-  --globe-country-stroke: rgba(96, 165, 250, 0.3);
-  --globe-ocean: #3b82f6; /* Will be transparent to show CSS gradient */
-  
-  --shadow-sm: 0 4px 10px rgba(99, 102, 241, 0.05);
-  --shadow-md: 0 10px 25px rgba(99, 102, 241, 0.08);
-  --shadow-lg: 0 20px 40px rgba(99, 102, 241, 0.12);
-  --shadow-xl: 0 30px 60px rgba(99, 102, 241, 0.15);
-  --shadow-glow: 0 0 20px rgba(99, 102, 241, 0.2);
-  --shadow-glow-lg: 0 0 40px rgba(99, 102, 241, 0.3);
+  --shadow-sm: 0 1px 2px rgba(124, 58, 237, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(124, 58, 237, 0.08), 0 2px 4px -2px rgba(124, 58, 237, 0.06);
+  --shadow-lg: 0 10px 15px -3px rgba(124, 58, 237, 0.08), 0 4px 6px -4px rgba(124, 58, 237, 0.06);
+  --shadow-xl: 0 20px 25px -5px rgba(124, 58, 237, 0.1), 0 8px 10px -6px rgba(124, 58, 237, 0.08);
+  --shadow-glow: 0 0 20px rgba(124, 58, 237, 0.15);
+  --shadow-glow-lg: 0 0 40px rgba(124, 58, 237, 0.2);
 }

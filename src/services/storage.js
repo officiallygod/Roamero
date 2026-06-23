@@ -2,6 +2,7 @@
  * Roamero Storage Service
  * Handles localStorage, cookies, and data persistence
  */
+import LZString from 'lz-string';
 
 const STORAGE_KEYS = {
   VISITS: 'roamero_visits',
@@ -40,7 +41,7 @@ export function deleteCookie(name) {
 }
 
 // ============================================
-// localStorage Wrapper (with error handling)
+// localStorage Wrapper
 // ============================================
 
 function getFromStorage(key, defaultValue = null) {
@@ -67,59 +68,26 @@ function saveToStorage(key, value) {
 // Visit Data Management
 // ============================================
 
-/**
- * Get all visit data
- * @returns {{ countries: Object, cities: Object }}
- */
 export function getVisits() {
   return getFromStorage(STORAGE_KEYS.VISITS, { countries: {}, cities: {} });
 }
 
-/**
- * Mark a country as visited
- * @param {string} countryId - ISO code
- * @param {string} [date] - Visit date (ISO string)
- * @param {string} visitor - 'me', 'partner', or 'both'
- */
-export function markCountryVisited(countryId, date = null, visitor = 'me') {
+export function markCountryVisited(countryId, date = null) {
   const visits = getVisits();
-  
-  // If it already exists with a different visitor, maybe upgrade to 'both'
   const current = visits.countries[countryId];
-  let finalVisitor = visitor;
-  if (current && current.visitor && current.visitor !== visitor && visitor !== 'both') {
-    finalVisitor = 'both';
-  }
 
   visits.countries[countryId] = {
     visitedAt: current?.visitedAt || date || new Date().toISOString().split('T')[0],
-    markedAt: new Date().toISOString(),
-    visitor: finalVisitor
+    markedAt: new Date().toISOString()
   };
   saveToStorage(STORAGE_KEYS.VISITS, visits);
   return visits;
 }
 
-/**
- * Update the visitor status of a country directly
- */
-export function updateCountryVisitor(countryId, visitor) {
-  const visits = getVisits();
-  if (visits.countries[countryId]) {
-    visits.countries[countryId].visitor = visitor;
-    saveToStorage(STORAGE_KEYS.VISITS, visits);
-  }
-  return visits;
-}
-
-/**
- * Unmark a country as visited
- * @param {string} countryId - ISO code
- */
 export function unmarkCountryVisited(countryId) {
   const visits = getVisits();
   delete visits.countries[countryId];
-  // Also remove all cities in this country
+  // Remove all cities in this country
   Object.keys(visits.cities).forEach(cityId => {
     if (cityId.startsWith(countryId.toLowerCase() + '-')) {
       delete visits.cities[cityId];
@@ -129,39 +97,24 @@ export function unmarkCountryVisited(countryId) {
   return visits;
 }
 
-/**
- * Mark a city as visited
- * @param {string} cityId - City identifier
- * @param {string} countryId - Parent country ISO code
- * @param {string} [date] - Visit date
- * @param {string} visitor - 'me', 'partner', or 'both'
- */
-export function markCityVisited(cityId, countryId, date = null, visitor = 'me') {
+export function markCityVisited(cityId, countryId, date = null) {
   const visits = getVisits();
   visits.cities[cityId] = {
     countryId,
     visitedAt: date || new Date().toISOString().split('T')[0],
-    markedAt: new Date().toISOString(),
-    visitor: visitor
+    markedAt: new Date().toISOString()
   };
   // Auto-mark country as visited too
   if (!visits.countries[countryId]) {
     visits.countries[countryId] = {
       visitedAt: date || new Date().toISOString().split('T')[0],
-      markedAt: new Date().toISOString(),
-      visitor: visitor
+      markedAt: new Date().toISOString()
     };
-  } else if (visits.countries[countryId].visitor !== visitor && visits.countries[countryId].visitor !== 'both') {
-     visits.countries[countryId].visitor = 'both';
   }
   saveToStorage(STORAGE_KEYS.VISITS, visits);
   return visits;
 }
 
-/**
- * Unmark a city as visited
- * @param {string} cityId
- */
 export function unmarkCityVisited(cityId) {
   const visits = getVisits();
   delete visits.cities[cityId];
@@ -169,32 +122,16 @@ export function unmarkCityVisited(cityId) {
   return visits;
 }
 
-/**
- * Check if a country is visited
- * @param {string} countryId
- * @returns {boolean}
- */
 export function isCountryVisited(countryId) {
   const visits = getVisits();
   return !!visits.countries[countryId];
 }
 
-/**
- * Check if a city is visited
- * @param {string} cityId
- * @returns {boolean}
- */
 export function isCityVisited(cityId) {
   const visits = getVisits();
   return !!visits.cities[cityId];
 }
 
-/**
- * Get visit statistics
- * @param {number} totalCountries
- * @param {number} totalCities
- * @returns {{ countriesVisited, citiesVisited, countryPercentage, cityPercentage }}
- */
 export function getStats(totalCountries = 195, totalCities = 1950) {
   const visits = getVisits();
   const countriesVisited = Object.keys(visits.countries).length;
@@ -206,15 +143,10 @@ export function getStats(totalCountries = 195, totalCities = 1950) {
     totalCities,
     countryPercentage: Math.round((countriesVisited / totalCountries) * 100),
     cityPercentage: Math.round((citiesVisited / totalCities) * 100),
-    continentsVisited: 0, // calculated elsewhere
+    continentsVisited: 0,
   };
 }
 
-/**
- * Get visited cities for a specific country
- * @param {string} countryId
- * @returns {Object}
- */
 export function getVisitedCitiesForCountry(countryId) {
   const visits = getVisits();
   const prefix = countryId.toLowerCase() + '-';
@@ -228,6 +160,65 @@ export function getVisitedCitiesForCountry(countryId) {
 }
 
 // ============================================
+// URL Data Synchronization
+// ============================================
+
+export function generateShareableUrl() {
+  const visits = getVisits();
+  const minimalData = {
+    co: Object.keys(visits.countries),
+    ci: Object.keys(visits.cities)
+  };
+  const jsonString = JSON.stringify(minimalData);
+  const compressed = LZString.compressToEncodedURIComponent(jsonString);
+  const baseUrl = window.location.origin + window.location.pathname;
+  return `${baseUrl}?data=${compressed}`;
+}
+
+export function loadSharedData(encodedData) {
+  try {
+    const decompressed = LZString.decompressFromEncodedURIComponent(encodedData);
+    if (!decompressed) return false;
+    
+    const sharedData = JSON.parse(decompressed);
+    const visits = getVisits();
+    
+    // Merge shared countries into local visits
+    if (sharedData.co && Array.isArray(sharedData.co)) {
+      sharedData.co.forEach(iso => {
+        if (!visits.countries[iso]) {
+          visits.countries[iso] = {
+            visitedAt: new Date().toISOString().split('T')[0],
+            markedAt: new Date().toISOString()
+          };
+        }
+      });
+    }
+    
+    // Merge shared cities into local visits
+    if (sharedData.ci && Array.isArray(sharedData.ci)) {
+      sharedData.ci.forEach(cityId => {
+        if (!visits.cities[cityId]) {
+          // Attempt to extract countryId from cityId (e.g., "us-chicago" -> "us")
+          const countryId = cityId.split('-')[0].toUpperCase();
+          visits.cities[cityId] = {
+            countryId: countryId,
+            visitedAt: new Date().toISOString().split('T')[0],
+            markedAt: new Date().toISOString()
+          };
+        }
+      });
+    }
+    
+    saveToStorage(STORAGE_KEYS.VISITS, visits);
+    return true;
+  } catch (err) {
+    console.error('[Roamero] Failed to load shared data:', err);
+    return false;
+  }
+}
+
+// ============================================
 // Search History
 // ============================================
 
@@ -238,14 +229,8 @@ export function getSearchHistory() {
 export function addSearchHistory(query) {
   if (!query || query.trim().length < 2) return;
   let history = getSearchHistory();
-  // Remove duplicates
   history = history.filter(h => h.query !== query.trim());
-  // Add to front
-  history.unshift({
-    query: query.trim(),
-    timestamp: new Date().toISOString(),
-  });
-  // Limit size
+  history.unshift({ query: query.trim(), timestamp: new Date().toISOString() });
   if (history.length > MAX_SEARCH_HISTORY) {
     history = history.slice(0, MAX_SEARCH_HISTORY);
   }
@@ -262,14 +247,11 @@ export function clearSearchHistory() {
 // ============================================
 
 const DEFAULT_PREFERENCES = {
-  theme: 'light', // The new theme is light/cute by default
+  theme: 'light',
   autoRotate: true,
   showCities: true,
   globeStyle: 'default',
-  animations: true,
-  enablePartner: true,
-  myName: 'Me',
-  partnerName: 'Partner',
+  animations: true
 };
 
 export function getPreferences() {
@@ -293,7 +275,7 @@ export function setTheme(theme) {
 }
 
 // ============================================
-// Cookie Consent
+// Cookie Consent & First Visit
 // ============================================
 
 export function getCookieConsent() {
@@ -309,10 +291,6 @@ export function hasGivenConsent() {
   return !!getCookieConsent();
 }
 
-// ============================================
-// First Visit Detection
-// ============================================
-
 export function isFirstVisit() {
   return !getFromStorage(STORAGE_KEYS.FIRST_VISIT, false);
 }
@@ -321,33 +299,6 @@ export function markFirstVisitComplete() {
   saveToStorage(STORAGE_KEYS.FIRST_VISIT, true);
 }
 
-// ============================================
-// Data Export / Import
-// ============================================
-
-export function exportData() {
-  return {
-    version: 1,
-    exportedAt: new Date().toISOString(),
-    visits: getVisits(),
-    searchHistory: getSearchHistory(),
-    preferences: getPreferences(),
-  };
-}
-
-export function importData(data) {
-  if (!data || data.version !== 1) {
-    throw new Error('Invalid data format');
-  }
-  if (data.visits) saveToStorage(STORAGE_KEYS.VISITS, data.visits);
-  if (data.searchHistory) saveToStorage(STORAGE_KEYS.SEARCH_HISTORY, data.searchHistory);
-  if (data.preferences) saveToStorage(STORAGE_KEYS.PREFERENCES, data.preferences);
-  return true;
-}
-
-/**
- * Clear all Roamero data
- */
 export function clearAllData() {
   Object.values(STORAGE_KEYS).forEach(key => {
     localStorage.removeItem(key);

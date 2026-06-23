@@ -3,7 +3,7 @@
  * Handles routing, theme initialization, and page mounting
  */
 import './styles/global.css';
-import { getTheme, isFirstVisit, markFirstVisitComplete, getPreferences } from './services/storage.js';
+import { getTheme, isFirstVisit, markFirstVisitComplete, getPreferences, loadSharedData } from './services/storage.js';
 import { prefersDarkMode } from './utils/helpers.js';
 
 // ============================================
@@ -69,6 +69,19 @@ async function boot() {
   // 1. Init theme before anything renders
   initTheme();
   
+  // 1.5 Intercept shared data
+  const urlParams = new URLSearchParams(window.location.search);
+  const sharedData = urlParams.get('data');
+  if (sharedData) {
+    if (loadSharedData(sharedData)) {
+      window.history.replaceState({}, document.title, window.location.pathname + window.location.hash);
+      // Small delay to ensure styles loaded before alert
+      setTimeout(() => alert('✨ Shared map loaded successfully!'), 500);
+    } else {
+      setTimeout(() => alert('Failed to load shared map. Link might be invalid or corrupted.'), 500);
+    }
+  }
+
   // 2. Setup router
   const router = new Router();
   
