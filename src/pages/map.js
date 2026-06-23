@@ -21,6 +21,31 @@ let countriesData = null;
 let themeObserver = null;
 let currentSidePanel = null;
 
+// Progress circle helper
+function getProgressCircle(value, max, label, color) {
+  const radius = 36;
+  const circumference = 2 * Math.PI * radius;
+  const percent = max > 0 ? (value / max) : 0;
+  const dashoffset = circumference - percent * circumference;
+  
+  return `
+    <div class="progress-ring-container" style="display: flex; flex-direction: column; align-items: center; gap: 8px;">
+      <div style="position: relative; width: 80px; height: 80px;">
+        <svg width="80" height="80" style="transform: rotate(-90deg);">
+          <circle cx="40" cy="40" r="${radius}" fill="transparent" stroke="var(--color-border)" stroke-width="6" />
+          <circle cx="40" cy="40" r="${radius}" fill="transparent" stroke="${color}" stroke-width="6" 
+                  stroke-dasharray="${circumference}" stroke-dashoffset="${dashoffset}" 
+                  style="transition: stroke-dashoffset 1s ease-out;" stroke-linecap="round" />
+        </svg>
+        <div style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 1.25rem;">
+          ${value}
+        </div>
+      </div>
+      <div style="font-size: 0.75rem; color: var(--color-text-tertiary); text-transform: uppercase; letter-spacing: 0.5px;">${label}</div>
+    </div>
+  `;
+}
+
 export async function renderMap(container, router) {
   container.innerHTML = `
     <div class="dashboard-layout">
@@ -32,18 +57,11 @@ export async function renderMap(container, router) {
         </div>
         <div class="dash-section">
           <h2 class="dash-section-title">Your Progress</h2>
-          <div class="dash-stats" id="dash-stats-container">
-            <div class="dash-stat-card">
-              <div class="dash-stat-value" id="stat-countries">0</div>
-              <div class="dash-stat-label">Countries Visited</div>
-            </div>
-            <div class="dash-stat-card">
-              <div class="dash-stat-value" id="stat-cities">0</div>
-              <div class="dash-stat-label">Cities Visited</div>
-            </div>
+          <div class="dash-stats" id="dash-stats-container" style="display: flex; gap: 1rem; justify-content: center; margin-bottom: 2rem;">
+            <!-- Graphs inserted here via JS -->
           </div>
           
-          <button class="btn btn-primary" id="btn-share-progress" style="margin-top: 1.5rem; width: 100%; display: flex; justify-content: center; align-items: center; gap: 8px;">
+          <button class="btn btn-primary" id="btn-share-progress" style="width: 100%; display: flex; justify-content: center; align-items: center; gap: 8px;">
             <span>Share Map</span>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <circle cx="18" cy="5" r="3"></circle>
@@ -163,8 +181,15 @@ export async function renderMap(container, router) {
 
 function updateStats() {
   const visits = getVisits();
-  document.getElementById('stat-countries').textContent = Object.keys(visits.countries).length;
-  document.getElementById('stat-cities').textContent = Object.keys(visits.cities).length;
+  const countriesCount = Object.keys(visits.countries).length;
+  const citiesCount = Object.keys(visits.cities).length;
+  const container = document.getElementById('dash-stats-container');
+  if (container) {
+    container.innerHTML = `
+      ${getProgressCircle(countriesCount, 195, 'Countries', 'var(--color-accent)')}
+      ${getProgressCircle(citiesCount, 500, 'Cities', 'var(--color-info)')}
+    `;
+  }
 }
 
 /**
@@ -180,8 +205,8 @@ function getMapStyle(isDark, visits) {
   
   const matchExpr = ['match', getIso];
   
-  const unvisitedDark = '#121212';
-  const unvisitedLight = '#ffffff';
+  const unvisitedDark = '#1f1a2e';
+  const unvisitedLight = '#e5e7eb';
   
   if (visitedIsos.length === 0) {
     matchExpr.push('NONE', '#8b5cf6', isDark ? unvisitedDark : unvisitedLight);
@@ -227,37 +252,36 @@ function getMapStyle(isDark, visits) {
         type: 'line',
         source: 'countries',
         paint: {
-          'line-color': isDark ? '#2a2a2a' : '#e0e2e6',
-          'line-width': 0.8
+          'line-color': isDark ? '#3d335a' : '#d1d5db',
+          'line-width': 1
         }
       },
       {
         id: 'country-labels',
         type: 'symbol',
         source: 'countries',
-        minzoom: 4.0,
-        filter: ['>', ['get', 'POP_EST'], 5000000],
+        filter: ['>', ['get', 'POP_EST'], 1000000],
         layout: {
           'text-field': ['get', 'NAME'],
           'text-font': ['Open Sans Regular'],
-          'text-size': 14,
+          'text-size': [
+            'interpolate', ['linear'], ['zoom'],
+            1.5, 9,
+            4.0, 14
+          ],
           'text-transform': 'uppercase',
           'text-letter-spacing': 0.1,
-          'symbol-spacing': 1000,
-          'text-padding': 20,
           'text-allow-overlap': false,
           'text-ignore-placement': false,
-          'text-variable-anchor': ['center'],
-          'text-justify': 'center'
         },
         paint: {
-          'text-color': isDark ? '#8b7faf' : '#6b7280',
-          'text-halo-color': isDark ? '#121212' : '#ffffff',
-          'text-halo-width': 2,
+          'text-color': isDark ? '#a89cc8' : '#4b5563',
+          'text-halo-color': isDark ? '#0f0a1e' : '#ffffff',
+          'text-halo-width': 1.5,
           'text-opacity': [
             'interpolate', ['linear'], ['zoom'],
-            4.0, 0,
-            5.0, 1
+            1.0, 0.4,
+            2.5, 1
           ]
         }
       }
