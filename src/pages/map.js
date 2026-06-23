@@ -26,6 +26,16 @@ let activeContinentFilter = 'All';
 
 const CONTINENTS = ['All', 'Africa', 'Asia', 'Europe', 'North America', 'South America', 'Oceania'];
 
+const CONTINENT_CENTERS = {
+  'All': { center: [10, 20], zoom: 2.5 },
+  'Africa': { center: [17, 0], zoom: 3 },
+  'Asia': { center: [90, 40], zoom: 2.5 },
+  'Europe': { center: [15, 50], zoom: 3.5 },
+  'North America': { center: [-100, 45], zoom: 2.5 },
+  'South America': { center: [-60, -15], zoom: 3 },
+  'Oceania': { center: [135, -25], zoom: 3 }
+};
+
 // Progress circle helper
 function getProgressCircle(value, max, label, color) {
   const radius = 36;
@@ -202,6 +212,12 @@ function initFilterListeners(container) {
       activeContinentFilter = e.target.getAttribute('data-continent');
       pills.forEach(p => p.classList.remove('active'));
       e.target.classList.add('active');
+      
+      const target = CONTINENT_CENTERS[activeContinentFilter];
+      if (target && mapInstance) {
+        mapInstance.flyTo({ center: target.center, zoom: target.zoom, speed: 1.2 });
+      }
+      
       refreshMap();
     });
   });
@@ -240,7 +256,7 @@ function getMapStyle(isDark, visits) {
   }
   
   const unvisitedDark = '#1f1a2e';
-  const unvisitedLight = '#e5e7eb';
+  const unvisitedLight = '#ffffff'; // White landmass
   
   const visitedColors = ['match', ['get', 'MAPCOLOR7'],
     1, '#ff3366', 2, '#00d2ff', 3, '#ff9933', 
@@ -277,7 +293,7 @@ function getMapStyle(isDark, visits) {
         id: 'background',
         type: 'background',
         paint: {
-          'background-color': isDark ? '#000000' : '#f0f2f5'
+          'background-color': isDark ? '#000000' : '#e0f2fe' // Soft light blue ocean
         }
       },
       {
@@ -301,7 +317,7 @@ function getMapStyle(isDark, visits) {
         source: 'countries',
         ...(continentFilter ? { filter: continentFilter } : {}),
         paint: {
-          'line-color': isDark ? '#3d335a' : '#d1d5db',
+          'line-color': isDark ? '#3d335a' : '#94a3b8',
           'line-width': 1
         }
       },
