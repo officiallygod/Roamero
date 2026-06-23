@@ -2,6 +2,69 @@
    MAP PAGE STYLES — Roamero
    ============================================ */
 
+.dashboard-layout {
+  display: flex;
+  width: 100vw;
+  height: 100vh;
+  background: var(--gradient-globe);
+  overflow: hidden;
+}
+
+.dash-sidebar {
+  width: 320px;
+  background: var(--color-surface);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border-right: 1px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+  z-index: var(--z-sticky);
+}
+
+.dash-header {
+  padding: var(--space-xl);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.dash-title {
+  font-size: var(--text-2xl);
+  font-family: var(--font-display);
+  font-weight: var(--weight-bold);
+  color: var(--color-text-primary);
+}
+
+.dash-section {
+  padding: var(--space-xl);
+}
+
+.dash-section-title {
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+  margin-bottom: var(--space-lg);
+  font-weight: var(--weight-bold);
+}
+
+.dash-stat-card {
+  margin-bottom: var(--space-md);
+}
+
+.dash-stat-value {
+  font-size: var(--text-4xl);
+  font-weight: var(--weight-black);
+  color: var(--color-text-primary);
+}
+
+.dash-stat-label {
+  font-size: var(--text-sm);
+  color: var(--color-text-tertiary);
+}
+
+.dash-main {
+  flex: 1;
+  position: relative;
+}
+
 .map-page {
   width: 100vw;
   height: 100vh;
@@ -25,7 +88,7 @@
 
 /* === Top Bar === */
 .map-topbar {
-  position: fixed;
+  position: absolute;
   top: 0;
   left: 0;
   right: 0;
