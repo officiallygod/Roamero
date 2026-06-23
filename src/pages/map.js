@@ -284,7 +284,7 @@ function getMapStyle(isDark, visits) {
         id: 'country-fills',
         type: 'fill',
         source: 'countries',
-        filter: continentFilter ? continentFilter : undefined,
+        ...(continentFilter ? { filter: continentFilter } : {}),
         paint: {
           'fill-color': fillColor,
           'fill-opacity': [
@@ -299,7 +299,7 @@ function getMapStyle(isDark, visits) {
         id: 'country-borders',
         type: 'line',
         source: 'countries',
-        filter: continentFilter ? continentFilter : undefined,
+        ...(continentFilter ? { filter: continentFilter } : {}),
         paint: {
           'line-color': isDark ? '#3d335a' : '#d1d5db',
           'line-width': 1
