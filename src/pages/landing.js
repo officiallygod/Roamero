@@ -213,14 +213,14 @@ async function initHeroGlobe(mountEl) {
           {
             id: 'background',
             type: 'background',
-            paint: { 'background-color': isDark ? '#000000' : '#f0f2f5' }
+            paint: { 'background-color': isDark ? '#080808' : '#e5e7eb' }
           },
           {
             id: 'country-fills',
             type: 'fill',
             source: 'countries',
             paint: {
-              'fill-color': isDark ? '#121212' : '#ffffff',
+              'fill-color': isDark ? '#2a2a2a' : '#ffffff',
               'fill-opacity': 1.0
             }
           },
@@ -229,7 +229,7 @@ async function initHeroGlobe(mountEl) {
             type: 'line',
             source: 'countries',
             paint: {
-              'line-color': isDark ? '#2a2a2a' : '#e0e2e6',
+              'line-color': isDark ? '#3f3f3f' : '#cbd5e1',
               'line-width': 0.8
             }
           }

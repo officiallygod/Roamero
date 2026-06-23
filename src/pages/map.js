@@ -130,8 +130,9 @@ function getMapStyle(isDark, visits) {
   
   const matchExpr = ['match', getIso];
   
-  const unvisitedDark = '#121212';
-  const unvisitedLight = '#ffffff';
+  // High contrast unvisited country colors
+  const unvisitedDark = '#2a2a2a'; // Lighter grey for dark mode
+  const unvisitedLight = '#ffffff'; // Pure white for light mode
   
   if (visitedIsos.length === 0) {
     matchExpr.push('NONE', '#8b5cf6', isDark ? unvisitedDark : unvisitedLight);
@@ -159,7 +160,8 @@ function getMapStyle(isDark, visits) {
         id: 'background',
         type: 'background',
         paint: {
-          'background-color': isDark ? '#000000' : '#f0f2f5'
+          // Darker ocean for better contrast
+          'background-color': isDark ? '#080808' : '#e5e7eb'
         }
       },
       {
@@ -176,7 +178,8 @@ function getMapStyle(isDark, visits) {
         type: 'line',
         source: 'countries',
         paint: {
-          'line-color': isDark ? '#2a2a2a' : '#e0e2e6',
+          // Stronger borders for readability
+          'line-color': isDark ? '#3f3f3f' : '#cbd5e1',
           'line-width': 0.8
         }
       },
@@ -200,8 +203,8 @@ function getMapStyle(isDark, visits) {
           'text-justify': 'center'
         },
         paint: {
-          'text-color': isDark ? '#8b7faf' : '#6b7280',
-          'text-halo-color': isDark ? '#121212' : '#ffffff',
+          'text-color': isDark ? '#a1a1aa' : '#52525b',
+          'text-halo-color': isDark ? '#2a2a2a' : '#ffffff',
           'text-halo-width': 2,
           'text-opacity': [
             'interpolate',
@@ -236,8 +239,8 @@ async function initMap(container) {
       container: mountEl,
       style: getMapStyle(isDark, visits),
       center: [10, 20],
-      zoom: 1.5,
-      minZoom: 1.5,
+      zoom: 2.5, // Start closer for a better default view
+      minZoom: 1.5, // Allow zooming out
       maxZoom: 10,
       interactive: true,
       pitchWithRotate: false,
