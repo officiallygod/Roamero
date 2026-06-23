@@ -197,7 +197,9 @@ function getMapStyle(isDark, visits) {
     sources: {
       countries: {
         type: 'geojson',
-        data: import.meta.env.BASE_URL + 'data/50m.geojson'
+        data: import.meta.env.BASE_URL + 'data/110m.geojson',
+        generateId: true, // Optimizes the chunking (geojson-vt)
+        tolerance: 0.5 // Simplifies the chunks further
       },
       'country-centroids': {
         type: 'geojson',
