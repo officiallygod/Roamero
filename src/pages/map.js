@@ -22,6 +22,9 @@ let themeObserver = null;
 let currentSidePanel = null;
 let cachedGeojson = null;
 let cachedLabels = null;
+let activeContinentFilter = 'All';
+
+const CONTINENTS = ['All', 'Africa', 'Asia', 'Europe', 'North America', 'South America', 'Oceania'];
 
 // Progress circle helper
 function getProgressCircle(value, max, label, color) {
@@ -59,8 +62,12 @@ export async function renderMap(container, router) {
         </div>
         <div class="dash-section">
           <h2 class="dash-section-title">Your Progress</h2>
-          <div class="dash-stats" id="dash-stats-container" style="display: flex; gap: 1rem; justify-content: center; margin-bottom: 2rem;">
+          <div class="dash-stats" id="dash-stats-container" style="display: flex; gap: 1rem; justify-content: center; margin-bottom: 1.5rem;">
             <!-- Graphs inserted here via JS -->
+          </div>
+          
+          <div class="filter-pills" id="continent-filters">
+            ${CONTINENTS.map(c => `<div class="filter-pill ${activeContinentFilter === c ? 'active' : ''}" data-continent="${c}">${c}</div>`).join('')}
           </div>
           
           <button class="btn btn-primary" id="btn-share-progress" style="width: 100%; display: flex; justify-content: center; align-items: center; gap: 8px;">
@@ -106,6 +113,11 @@ export async function renderMap(container, router) {
           <div class="map-actions" id="map-actions"></div>
         </div>
       </main>
+
+      <div class="map-tooltip" id="map-tooltip">
+        <div class="tooltip-title" id="tooltip-title">Country</div>
+        <div class="tooltip-desc" id="tooltip-desc">Unvisited</div>
+      </div>
 
       <!-- Side Panel Overlay -->
       <div class="side-panel-overlay" id="side-panel-overlay"></div>
@@ -169,6 +181,8 @@ export async function renderMap(container, router) {
   // Update initial stats
   updateStats();
 
+  initFilterListeners(container);
+
   return {
     destroy() {
       if (themeObserver) themeObserver.disconnect();
@@ -179,6 +193,18 @@ export async function renderMap(container, router) {
       }
     }
   };
+}
+
+function initFilterListeners(container) {
+  const pills = container.querySelectorAll('.filter-pill');
+  pills.forEach(pill => {
+    pill.addEventListener('click', (e) => {
+      activeContinentFilter = e.target.getAttribute('data-continent');
+      pills.forEach(p => p.classList.remove('active'));
+      e.target.classList.add('active');
+      refreshMap();
+    });
+  });
 }
 
 function updateStats() {
@@ -227,6 +253,8 @@ function getMapStyle(isDark, visits) {
     isVisitedExpr, visitedColors,
     isDark ? unvisitedDark : unvisitedLight
   ];
+  
+  const continentFilter = activeContinentFilter === 'All' ? null : ['==', ['get', 'CONTINENT'], activeContinentFilter];
 
   return {
     version: 8,
@@ -256,15 +284,22 @@ function getMapStyle(isDark, visits) {
         id: 'country-fills',
         type: 'fill',
         source: 'countries',
+        filter: continentFilter ? continentFilter : undefined,
         paint: {
           'fill-color': fillColor,
-          'fill-opacity': 1.0
+          'fill-opacity': [
+            'case',
+            ['boolean', ['feature-state', 'hover'], false],
+            0.8,
+            1.0
+          ]
         }
       },
       {
         id: 'country-borders',
         type: 'line',
         source: 'countries',
+        filter: continentFilter ? continentFilter : undefined,
         paint: {
           'line-color': isDark ? '#3d335a' : '#d1d5db',
           'line-width': 1
@@ -274,7 +309,7 @@ function getMapStyle(isDark, visits) {
         id: 'country-labels',
         type: 'symbol',
         source: 'countryLabels',
-        filter: ['>', ['get', 'POP_EST'], 1000000],
+        filter: continentFilter ? ['all', ['>', ['get', 'POP_EST'], 1000000], continentFilter] : ['>', ['get', 'POP_EST'], 1000000],
         layout: {
           'text-field': ['get', 'NAME'],
           'text-font': ['Open Sans Regular'],
@@ -351,7 +386,7 @@ async function initMap(container) {
     });
     
     mapInstance.on('style.load', () => {
-      mapInstance.setProjection({ type: 'globe' });
+      // Removed setProjection({ type: 'globe' }) to use flat Mercator projection
       if (loadingEl) {
         loadingEl.style.opacity = '0';
         setTimeout(() => loadingEl.remove(), 300);
@@ -378,11 +413,55 @@ async function initMap(container) {
       }
     });
 
-    mapInstance.on('mouseenter', 'country-fills', () => {
+    const tooltipEl = container.querySelector('#map-tooltip');
+    const tooltipTitle = container.querySelector('#tooltip-title');
+    const tooltipDesc = container.querySelector('#tooltip-desc');
+    let hoveredCountryId = null;
+
+    mapInstance.on('mousemove', 'country-fills', (e) => {
       mapInstance.getCanvas().style.cursor = 'pointer';
+      
+      if (e.features.length > 0) {
+        const feature = e.features[0];
+        const getIso = (p) => (p.ISO_A2 === '-99' ? p.ISO_A2_EH : p.ISO_A2);
+        const iso = getIso(feature.properties);
+        
+        if (hoveredCountryId !== feature.id) {
+          if (hoveredCountryId !== null) {
+            mapInstance.setFeatureState({ source: 'countries', id: hoveredCountryId }, { hover: false });
+          }
+          hoveredCountryId = feature.id;
+          mapInstance.setFeatureState({ source: 'countries', id: hoveredCountryId }, { hover: true });
+        }
+        
+        const country = countriesData.COUNTRIES.find(c => c.id === iso);
+        if (country) {
+          tooltipTitle.textContent = country.name;
+          const currentVisits = getVisits();
+          const visitedData = currentVisits.countries[country.id];
+          if (visitedData) {
+            const date = new Date(visitedData.visitedAt).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+            tooltipDesc.textContent = `Visited on ${date}`;
+            tooltipDesc.style.color = 'var(--color-success)';
+          } else {
+            tooltipDesc.textContent = 'Click to mark as visited';
+            tooltipDesc.style.color = 'var(--color-text-tertiary)';
+          }
+          
+          tooltipEl.style.left = e.point.x + 'px';
+          tooltipEl.style.top = e.point.y + 'px';
+          tooltipEl.classList.add('visible');
+        }
+      }
     });
+
     mapInstance.on('mouseleave', 'country-fills', () => {
       mapInstance.getCanvas().style.cursor = '';
+      if (hoveredCountryId !== null) {
+        mapInstance.setFeatureState({ source: 'countries', id: hoveredCountryId }, { hover: false });
+      }
+      hoveredCountryId = null;
+      tooltipEl.classList.remove('visible');
     });
     
   } catch (err) {
