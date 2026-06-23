@@ -4,6 +4,7 @@
 
 .dashboard-layout {
   display: flex;
+  flex-direction: row;
   width: 100vw;
   height: 100vh;
   background: var(--gradient-globe);
@@ -12,6 +13,7 @@
 
 .dash-sidebar {
   width: 320px;
+  flex-shrink: 0;
   background: var(--color-surface);
   backdrop-filter: var(--glass-blur);
   -webkit-backdrop-filter: var(--glass-blur);

@@ -200,7 +200,9 @@ function getMapStyle(isDark, visits) {
     sources: {
       countries: {
         type: 'geojson',
-        data: import.meta.env.BASE_URL + 'data/50m.geojson'
+        data: import.meta.env.BASE_URL + 'data/110m.geojson',
+        generateId: true,
+        tolerance: 0.5
       }
     },
     layers: [
@@ -326,6 +328,16 @@ async function initMap(container) {
     
   } catch (err) {
     console.error('[Roamero] Failed to initialize map:', err);
+    if (loadingEl) {
+      loadingEl.innerHTML = `
+        <div style="text-align: center; color: var(--color-text-secondary);">
+          <div style="font-size: 48px; margin-bottom: 16px;">🌍</div>
+          <div>Could not load the map engine.</div>
+          <div style="font-size: 13px; margin-top: 8px; color: var(--color-text-muted);">${err.message}</div>
+          <button class="btn btn-primary" style="margin-top: 16px;" onclick="location.reload()">Retry</button>
+        </div>
+      `;
+    }
   }
 }
 
