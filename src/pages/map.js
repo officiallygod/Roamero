@@ -152,10 +152,12 @@ function getMapStyle(isDark, visits) {
   const matchExpr = ['match', getIso];
   
   // Figma mockup colors & partner tracking
-  const unvisitedColor = '#e9d5ff'; // Light lavender
-  const colorMe = 'var(--color-visited, #ff7675)';
-  const colorPartner = 'var(--color-visited-partner, #74b9ff)';
-  const colorBoth = 'var(--color-visited-both, #a29bfe)';
+  const unvisitedColor = isDark ? 'rgba(139, 92, 246, 0.08)' : 'rgba(255, 118, 117, 0.05)';
+  
+  // Hardcoded hex colors matching variables.css since MapLibre canvas cannot parse var()
+  const colorMe = isDark ? '#c084fc' : '#ff7675';
+  const colorPartner = isDark ? '#38bdf8' : '#74b9ff';
+  const colorBoth = isDark ? '#f472b6' : '#a29bfe';
   
   if (visitedIsos.length === 0) {
     matchExpr.push('NONE', colorMe, unvisitedColor);
