@@ -213,14 +213,14 @@ async function initHeroGlobe(mountEl) {
           {
             id: 'background',
             type: 'background',
-            paint: { 'background-color': isDark ? '#080808' : '#e5e7eb' }
+            paint: { 'background-color': 'rgba(0,0,0,0)' }
           },
           {
             id: 'country-fills',
             type: 'fill',
             source: 'countries',
             paint: {
-              'fill-color': isDark ? '#2a2a2a' : '#ffffff',
+              'fill-color': '#e9d5ff', // Light lavender
               'fill-opacity': 1.0
             }
           },
@@ -229,8 +229,8 @@ async function initHeroGlobe(mountEl) {
             type: 'line',
             source: 'countries',
             paint: {
-              'line-color': isDark ? '#3f3f3f' : '#cbd5e1',
-              'line-width': 0.8
+              'line-color': '#c4b5fd', // Darker lavender border
+              'line-width': 1.0
             }
           }
         ]

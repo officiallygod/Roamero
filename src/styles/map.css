@@ -17,6 +17,9 @@
   position: absolute;
   top: 0;
   left: 0;
+  background-color: #31076b; /* Deep violet */
+  background-image: radial-gradient(#6023a1 2px, transparent 2px);
+  background-size: 32px 32px;
 }
 
 .globe-container canvas {

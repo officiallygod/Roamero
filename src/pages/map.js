@@ -122,7 +122,6 @@ export async function renderMap(container, router) {
 function getMapStyle(isDark, visits) {
   const visitedIsos = Object.keys(visits.countries);
   
-  // Natural Earth uses -99 for France and Norway. Real ISO is in ISO_A2_EH
   const getIso = ['case', 
     ['==', ['get', 'ISO_A2'], '-99'], ['get', 'ISO_A2_EH'], 
     ['get', 'ISO_A2']
@@ -130,20 +129,37 @@ function getMapStyle(isDark, visits) {
   
   const matchExpr = ['match', getIso];
   
-  // High contrast unvisited country colors
-  const unvisitedDark = '#2a2a2a'; // Lighter grey for dark mode
-  const unvisitedLight = '#ffffff'; // Pure white for light mode
+  // Figma mockup colors
+  const unvisitedColor = '#e9d5ff'; // Light lavender
   
   if (visitedIsos.length === 0) {
-    matchExpr.push('NONE', '#8b5cf6', isDark ? unvisitedDark : unvisitedLight);
+    matchExpr.push('NONE', '#8b5cf6', unvisitedColor);
   } else {
     visitedIsos.forEach(iso => {
        const country = countriesData.COUNTRIES.find(c => c.id === iso);
        const color = getContinentColor(country ? country.continent : 'Europe');
        matchExpr.push(iso, color);
     });
-    matchExpr.push(isDark ? unvisitedDark : unvisitedLight);
+    matchExpr.push(unvisitedColor);
   }
+
+  // Generate Centroids for exact exactly one label per country
+  const centroidFeatures = countriesData.COUNTRIES.map(c => ({
+    type: 'Feature',
+    properties: {
+      iso: c.id,
+      name: c.name
+    },
+    geometry: {
+      type: 'Point',
+      coordinates: [c.lng, c.lat]
+    }
+  }));
+
+  const centroidsGeojson = {
+    type: 'FeatureCollection',
+    features: centroidFeatures
+  };
 
   return {
     version: 8,
@@ -151,8 +167,11 @@ function getMapStyle(isDark, visits) {
     sources: {
       countries: {
         type: 'geojson',
-        // 50m provides gorgeous smooth borders, while MapLibre keeps it lightning fast
         data: import.meta.env.BASE_URL + 'data/50m.geojson'
+      },
+      'country-centroids': {
+        type: 'geojson',
+        data: centroidsGeojson
       }
     },
     layers: [
@@ -160,8 +179,7 @@ function getMapStyle(isDark, visits) {
         id: 'background',
         type: 'background',
         paint: {
-          // Darker ocean for better contrast
-          'background-color': isDark ? '#080808' : '#e5e7eb'
+          'background-color': 'rgba(0,0,0,0)' // Transparent to show CSS dot grid
         }
       },
       {
@@ -178,40 +196,38 @@ function getMapStyle(isDark, visits) {
         type: 'line',
         source: 'countries',
         paint: {
-          // Stronger borders for readability
-          'line-color': isDark ? '#3f3f3f' : '#cbd5e1',
-          'line-width': 0.8
+          'line-color': '#c4b5fd', // Darker lavender border
+          'line-width': 1.0
         }
       },
       {
         id: 'country-labels',
         type: 'symbol',
-        source: 'countries',
-        minzoom: 4.0, // Only show when zoomed in
-        filter: ['>', ['get', 'POP_EST'], 5000000], // Filter tiny countries
+        source: 'country-centroids',
+        minzoom: 2.0, 
         layout: {
-          'text-field': ['get', 'NAME'],
+          'text-field': ['get', 'name'],
           'text-font': ['Open Sans Regular'],
-          'text-size': 14,
+          'text-size': 12,
           'text-transform': 'uppercase',
           'text-letter-spacing': 0.1,
-          'symbol-spacing': 1000,
-          'text-padding': 20,
+          'symbol-spacing': 500,
+          'text-padding': 10,
           'text-allow-overlap': false,
           'text-ignore-placement': false,
           'text-variable-anchor': ['center'],
           'text-justify': 'center'
         },
         paint: {
-          'text-color': isDark ? '#a1a1aa' : '#52525b',
-          'text-halo-color': isDark ? '#2a2a2a' : '#ffffff',
-          'text-halo-width': 2,
+          'text-color': '#4c1d95',
+          'text-halo-color': '#ffffff',
+          'text-halo-width': 3,
           'text-opacity': [
             'interpolate',
             ['linear'],
             ['zoom'],
-            4.0, 0, // Fade in smoothly
-            5.0, 1
+            2.5, 0, // Fade in
+            3.5, 1
           ]
         }
       }
