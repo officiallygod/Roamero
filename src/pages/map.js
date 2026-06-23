@@ -22,47 +22,69 @@ let currentSidePanel = null;
 
 export async function renderMap(container, router) {
   container.innerHTML = `
-    <div class="map-page">
-      <!-- Loading State -->
-      <div class="globe-loading" id="globe-loading">
-        <div class="globe-loading-spinner"></div>
-        <div class="globe-loading-text">Initializing Engine...</div>
-      </div>
-      
-      <!-- Map Mount -->
-      <div class="globe-container" id="globe-mount"></div>
-      
-      <!-- Top Bar -->
-      <div class="map-topbar">
-        <div class="search-wrapper" id="search-wrapper">
-          <div class="search-input-container">
-            <span class="search-icon">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-              </svg>
-            </span>
-            <input type="text" class="search-input" id="search-input" placeholder="Search countries & cities..." autocomplete="off" />
-            <button class="search-clear" id="search-clear">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-              </svg>
-            </button>
-            <span class="search-kbd">/</span>
-          </div>
-          <div class="search-results" id="search-results"></div>
+    <div class="dashboard-layout">
+      <!-- Left Sidebar: Analytics -->
+      <aside class="dash-sidebar left-sidebar">
+        <div class="dash-header">
+          <h1 class="dash-title">Roamero</h1>
+          <p class="dash-subtitle">Your Travel Dashboard</p>
+        </div>
+        <div class="dash-section">
+          <h2 class="dash-section-title">Overview</h2>
+          <div class="dash-stats" id="dash-stats-container"></div>
+        </div>
+      </aside>
+
+      <!-- Center Map -->
+      <main class="dash-main">
+        <div class="globe-loading" id="globe-loading">
+          <div class="globe-loading-spinner"></div>
+          <div class="globe-loading-text">Initializing Engine...</div>
         </div>
         
-        <div class="map-actions" id="map-actions">
-          <!-- theme toggle inserted here -->
+        <div class="globe-container" id="globe-mount"></div>
+        
+        <div class="map-topbar">
+          <div class="search-wrapper" id="search-wrapper">
+            <div class="search-input-container">
+              <span class="search-icon">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                </svg>
+              </span>
+              <input type="text" class="search-input" id="search-input" placeholder="Search countries & cities..." autocomplete="off" />
+              <button class="search-clear" id="search-clear">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+              </button>
+              <span class="search-kbd">/</span>
+            </div>
+            <div class="search-results" id="search-results"></div>
+          </div>
         </div>
-      </div>
-      
+      </main>
+
+      <!-- Right Sidebar: Settings & Info -->
+      <aside class="dash-sidebar right-sidebar">
+        <div class="dash-section">
+          <h2 class="dash-section-title">Settings</h2>
+          <div class="dash-settings">
+            <div class="setting-item" id="map-actions"></div>
+          </div>
+        </div>
+        <div class="dash-section">
+          <h2 class="dash-section-title">Suggestions</h2>
+          <div class="dash-suggestions">
+            <p style="font-size: var(--text-sm); color: var(--color-text-secondary);">Explore the map to see new places!</p>
+          </div>
+        </div>
+      </aside>
+
       <!-- Side Panel Overlay -->
       <div class="side-panel-overlay" id="side-panel-overlay"></div>
-      
       <!-- Side Panel -->
       <div class="side-panel" id="side-panel"></div>
-      
       <!-- Toast -->
       <div class="toast" id="toast"></div>
     </div>
@@ -129,15 +151,21 @@ function getMapStyle(isDark, visits) {
   
   const matchExpr = ['match', getIso];
   
-  // Figma mockup colors
+  // Figma mockup colors & partner tracking
   const unvisitedColor = '#e9d5ff'; // Light lavender
+  const colorMe = 'var(--color-visited, #ff7675)';
+  const colorPartner = 'var(--color-visited-partner, #74b9ff)';
+  const colorBoth = 'var(--color-visited-both, #a29bfe)';
   
   if (visitedIsos.length === 0) {
-    matchExpr.push('NONE', '#8b5cf6', unvisitedColor);
+    matchExpr.push('NONE', colorMe, unvisitedColor);
   } else {
     visitedIsos.forEach(iso => {
-       const country = countriesData.COUNTRIES.find(c => c.id === iso);
-       const color = getContinentColor(country ? country.continent : 'Europe');
+       const info = visits.countries[iso];
+       const visitor = info?.visitor || 'me';
+       let color = colorMe;
+       if (visitor === 'partner') color = colorPartner;
+       if (visitor === 'both') color = colorBoth;
        matchExpr.push(iso, color);
     });
     matchExpr.push(unvisitedColor);
@@ -335,13 +363,49 @@ async function initMap(container) {
 }
 
 /**
- * Refresh Map Style based on visits
+ * Refresh Map Style based on visits and update dashboard stats
  */
 function refreshMap() {
   if (!mapInstance || !mapInstance.isStyleLoaded()) return;
   const isDark = document.documentElement.dataset.theme === 'dark';
   const visits = getVisits();
   mapInstance.setStyle(getMapStyle(isDark, visits));
+  renderDashboardStats();
+}
+
+/**
+ * Render the Analytics Dashboard
+ */
+function renderDashboardStats() {
+  const container = document.getElementById('dash-stats-container');
+  if (!container) return;
+  
+  const visits = getVisits();
+  const visitedCountries = Object.values(visits.countries);
+  const total = visitedCountries.length;
+  
+  const meCount = visitedCountries.filter(c => c.visitor === 'me' || !c.visitor).length;
+  const partnerCount = visitedCountries.filter(c => c.visitor === 'partner').length;
+  const bothCount = visitedCountries.filter(c => c.visitor === 'both').length;
+
+  container.innerHTML = `
+    <div class="dash-stat-card">
+      <div class="dash-stat-value">${total}</div>
+      <div class="dash-stat-label">Total Countries</div>
+    </div>
+    <div class="dash-stat-card partner-stat">
+      <div class="dash-stat-value" style="color: var(--color-visited)">${meCount}</div>
+      <div class="dash-stat-label">You</div>
+    </div>
+    <div class="dash-stat-card partner-stat">
+      <div class="dash-stat-value" style="color: var(--color-visited-partner)">${partnerCount}</div>
+      <div class="dash-stat-label">Partner</div>
+    </div>
+    <div class="dash-stat-card partner-stat">
+      <div class="dash-stat-value" style="color: var(--color-visited-both)">${bothCount}</div>
+      <div class="dash-stat-label">Together</div>
+    </div>
+  `;
 }
 
 // ============================================
@@ -532,13 +596,11 @@ function openSidePanel(container, country) {
       </div>
       
       <!-- Country Visit Toggle -->
-      <div class="country-visit-toggle ${countryVisited ? 'visited' : ''}" id="country-visit-toggle">
-        <div class="visit-toggle-label">
-          <div class="visit-toggle-check">
-            ${countryVisited ? `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>` : ''}
-          </div>
-          <span>${countryVisited ? 'Visited!' : 'Mark as visited'}</span>
-        </div>
+      <div class="country-visit-toggles" style="display: flex; gap: 8px; margin-bottom: var(--space-xl);">
+        <button class="btn-visitor ${visits.countries[country.id]?.visitor === 'me' ? 'active' : ''}" data-visitor="me">Me</button>
+        <button class="btn-visitor ${visits.countries[country.id]?.visitor === 'partner' ? 'active' : ''}" data-visitor="partner">Partner</button>
+        <button class="btn-visitor ${visits.countries[country.id]?.visitor === 'both' ? 'active' : ''}" data-visitor="both">Both</button>
+        <button class="btn-visitor remove-visit ${!countryVisited ? 'hidden' : ''}" id="btn-remove-visit" title="Remove">❌</button>
       </div>
       
       ${countryVisited ? `
@@ -580,17 +642,27 @@ function openSidePanel(container, country) {
     closeSidePanel(container);
   });
   
-  panel.querySelector('#country-visit-toggle').addEventListener('click', () => {
-    if (isCountryVisited(country.id)) {
+  panel.querySelectorAll('.btn-visitor').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const visitor = e.target.dataset.visitor;
+      if (visitor) {
+        markCountryVisited(country.id, null, visitor);
+        showToast(container, `💕 Marked ${country.name} for ${visitor}!`);
+        refreshMap();
+        openSidePanel(container, country);
+      }
+    });
+  });
+
+  const removeBtn = panel.querySelector('#btn-remove-visit');
+  if (removeBtn) {
+    removeBtn.addEventListener('click', () => {
       unmarkCountryVisited(country.id);
       showToast(container, `❌ ${country.name} removed`);
-    } else {
-      markCountryVisited(country.id);
-      showToast(container, `✅ ${country.name} marked as visited!`);
-    }
-    refreshMap();
-    openSidePanel(container, country);
-  });
+      refreshMap();
+      openSidePanel(container, country);
+    });
+  }
   
   const dateInput = panel.querySelector('#country-visit-date');
   if (dateInput) {

@@ -79,14 +79,36 @@ export function getVisits() {
  * Mark a country as visited
  * @param {string} countryId - ISO code
  * @param {string} [date] - Visit date (ISO string)
+ * @param {string} visitor - 'me', 'partner', or 'both'
  */
-export function markCountryVisited(countryId, date = null) {
+export function markCountryVisited(countryId, date = null, visitor = 'me') {
   const visits = getVisits();
+  
+  // If it already exists with a different visitor, maybe upgrade to 'both'
+  const current = visits.countries[countryId];
+  let finalVisitor = visitor;
+  if (current && current.visitor && current.visitor !== visitor && visitor !== 'both') {
+    finalVisitor = 'both';
+  }
+
   visits.countries[countryId] = {
-    visitedAt: date || new Date().toISOString().split('T')[0],
+    visitedAt: current?.visitedAt || date || new Date().toISOString().split('T')[0],
     markedAt: new Date().toISOString(),
+    visitor: finalVisitor
   };
   saveToStorage(STORAGE_KEYS.VISITS, visits);
+  return visits;
+}
+
+/**
+ * Update the visitor status of a country directly
+ */
+export function updateCountryVisitor(countryId, visitor) {
+  const visits = getVisits();
+  if (visits.countries[countryId]) {
+    visits.countries[countryId].visitor = visitor;
+    saveToStorage(STORAGE_KEYS.VISITS, visits);
+  }
   return visits;
 }
 
@@ -112,20 +134,25 @@ export function unmarkCountryVisited(countryId) {
  * @param {string} cityId - City identifier
  * @param {string} countryId - Parent country ISO code
  * @param {string} [date] - Visit date
+ * @param {string} visitor - 'me', 'partner', or 'both'
  */
-export function markCityVisited(cityId, countryId, date = null) {
+export function markCityVisited(cityId, countryId, date = null, visitor = 'me') {
   const visits = getVisits();
   visits.cities[cityId] = {
     countryId,
     visitedAt: date || new Date().toISOString().split('T')[0],
     markedAt: new Date().toISOString(),
+    visitor: visitor
   };
   // Auto-mark country as visited too
   if (!visits.countries[countryId]) {
     visits.countries[countryId] = {
       visitedAt: date || new Date().toISOString().split('T')[0],
       markedAt: new Date().toISOString(),
+      visitor: visitor
     };
+  } else if (visits.countries[countryId].visitor !== visitor && visits.countries[countryId].visitor !== 'both') {
+     visits.countries[countryId].visitor = 'both';
   }
   saveToStorage(STORAGE_KEYS.VISITS, visits);
   return visits;
@@ -235,11 +262,14 @@ export function clearSearchHistory() {
 // ============================================
 
 const DEFAULT_PREFERENCES = {
-  theme: 'dark',
+  theme: 'light', // The new theme is light/cute by default
   autoRotate: true,
   showCities: true,
   globeStyle: 'default',
   animations: true,
+  enablePartner: true,
+  myName: 'Me',
+  partnerName: 'Partner',
 };
 
 export function getPreferences() {
