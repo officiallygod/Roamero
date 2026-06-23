@@ -20,6 +20,8 @@ let fuseInstance = null;
 let countriesData = null;
 let themeObserver = null;
 let currentSidePanel = null;
+let cachedGeojson = null;
+let cachedLabels = null;
 
 // Progress circle helper
 function getProgressCircle(value, max, label, color) {
@@ -203,21 +205,28 @@ function getMapStyle(isDark, visits) {
     ['get', 'ISO_A2']
   ];
   
-  const matchExpr = ['match', getIso];
+  const isVisitedExpr = ['match', getIso];
+  if (visitedIsos.length === 0) {
+    isVisitedExpr.push('NONE', true, false);
+  } else {
+    visitedIsos.forEach(iso => isVisitedExpr.push(iso, true));
+    isVisitedExpr.push(false);
+  }
   
   const unvisitedDark = '#1f1a2e';
   const unvisitedLight = '#e5e7eb';
   
-  if (visitedIsos.length === 0) {
-    matchExpr.push('NONE', '#8b5cf6', isDark ? unvisitedDark : unvisitedLight);
-  } else {
-    visitedIsos.forEach(iso => {
-       const country = countriesData.COUNTRIES.find(c => c.id === iso);
-       const color = getContinentColor(country ? country.continent : 'Europe');
-       matchExpr.push(iso, color);
-    });
-    matchExpr.push(isDark ? unvisitedDark : unvisitedLight);
-  }
+  const visitedColors = ['match', ['get', 'MAPCOLOR7'],
+    1, '#ff3366', 2, '#00d2ff', 3, '#ff9933', 
+    4, '#00e676', 5, '#b400ff', 6, '#ffd500', 
+    7, '#0066ff', '#8b5cf6'
+  ];
+
+  const fillColor = [
+    'case',
+    isVisitedExpr, visitedColors,
+    isDark ? unvisitedDark : unvisitedLight
+  ];
 
   return {
     version: 8,
@@ -225,9 +234,14 @@ function getMapStyle(isDark, visits) {
     sources: {
       countries: {
         type: 'geojson',
-        data: import.meta.env.BASE_URL + 'data/110m.geojson',
+        data: cachedGeojson || import.meta.env.BASE_URL + 'data/110m.geojson',
         generateId: true,
         tolerance: 0.5
+      },
+      countryLabels: {
+        type: 'geojson',
+        data: cachedLabels || { type: 'FeatureCollection', features: [] },
+        tolerance: 1.0
       }
     },
     layers: [
@@ -243,7 +257,7 @@ function getMapStyle(isDark, visits) {
         type: 'fill',
         source: 'countries',
         paint: {
-          'fill-color': matchExpr,
+          'fill-color': fillColor,
           'fill-opacity': 1.0
         }
       },
@@ -259,7 +273,7 @@ function getMapStyle(isDark, visits) {
       {
         id: 'country-labels',
         type: 'symbol',
-        source: 'countries',
+        source: 'countryLabels',
         filter: ['>', ['get', 'POP_EST'], 1000000],
         layout: {
           'text-field': ['get', 'NAME'],
@@ -300,6 +314,26 @@ async function initMap(container) {
     const m = await import('../data/countries.js');
     countriesData = m;
     
+    // Fetch and process GeoJSON for extreme performance and single-label placement
+    if (!cachedGeojson) {
+      const rawData = await fetch(import.meta.env.BASE_URL + 'data/110m.geojson').then(r => r.json());
+      // Remove Antarctica (AQ)
+      rawData.features = rawData.features.filter(f => f.properties.ISO_A2 !== 'AQ');
+      cachedGeojson = rawData;
+      
+      cachedLabels = {
+        type: 'FeatureCollection',
+        features: rawData.features.map(f => ({
+          type: 'Feature',
+          properties: f.properties,
+          geometry: {
+            type: 'Point',
+            coordinates: [f.properties.LABEL_X || 0, f.properties.LABEL_Y || 0]
+          }
+        })).filter(f => f.geometry.coordinates[0] !== 0 && f.geometry.coordinates[1] !== 0)
+      };
+    }
+    
     const visits = getVisits();
     const prefs = getPreferences();
     const isDark = prefs.theme === 'dark';
@@ -308,9 +342,9 @@ async function initMap(container) {
       container: mountEl,
       style: getMapStyle(isDark, visits),
       center: [10, 20],
-      zoom: 1.5,
-      minZoom: 1.5,
-      maxZoom: 10,
+      zoom: 3.0,
+      minZoom: 2.5,
+      maxZoom: 5.5,
       interactive: true,
       pitchWithRotate: false,
       dragRotate: false
@@ -327,7 +361,8 @@ async function initMap(container) {
     mapInstance.on('click', 'country-fills', (e) => {
       const feature = e.features[0];
       if (!feature) return;
-      const iso = feature.properties.ISO_A2;
+      const getIso = (p) => (p.ISO_A2 === '-99' ? p.ISO_A2_EH : p.ISO_A2);
+      const iso = getIso(feature.properties);
       const country = countriesData.COUNTRIES.find(c => c.id === iso);
       
       if (country) {
